@@ -1,6 +1,8 @@
 import VisitingCard from '../models/VisitingCard.js';
+import StoredFile from '../models/StoredFile.js';
+import ApiError from '../utils/ApiError.js';
 import asyncHandler from '../utils/asyncHandler.js';
-import { removeUpload } from '../middleware/upload.js';
+import { removeUpload, sniffImageType } from '../middleware/upload.js';
 import { pickFields } from './crudFactory.js';
 
 const FIELDS = ['name', 'designation', 'company', 'website', 'email', 'phone', 'location', 'locationUrl'];
@@ -47,34 +49,62 @@ export const getPublicCard = asyncHandler(async (req, res) => {
   const data = Object.fromEntries(FIELDS.map((f) => [f, card[f]]));
   data.frontImageUrl = card.frontImageUrl || null;
   data.backImageUrl = card.backImageUrl || null;
+  data.profilePhotoUrl = card.profilePhotoUrl || null;
   res.json({ success: true, data });
 });
 
-// Admin: update text fields and optionally replace/remove the front/back images
+const removeStoredFile = (id) => {
+  if (id) StoredFile.deleteOne({ _id: id }).catch(() => {});
+};
+
+// Admin: update text fields and optionally replace/remove the front/back images and the
+// founder profile photo
 export const updateCard = asyncHandler(async (req, res) => {
-  const doc = await getOrCreate();
   const files = req.files || {};
   const newPaths = IMAGES.map((f) => uploadedPath(files[f]?.[0]));
-  const previous = {};
-
-  doc.set(pickFields(req.body, FIELDS));
-
-  IMAGES.forEach((field, i) => {
-    previous[field] = doc[field];
-    if (newPaths[i]) doc[field] = newPaths[i];
-    else if (req.body[`remove${field[0].toUpperCase()}${field.slice(1)}`] === 'true') doc[field] = '';
-  });
+  const photoFile = files.profilePhoto?.[0];
+  const photoType = photoFile && sniffImageType(photoFile.buffer);
+  let newPhotoId;
 
   try {
+    if (photoFile && !photoType) throw ApiError.badRequest('Profile photo must be a valid JPG, PNG or WEBP image');
+
+    const doc = await getOrCreate();
+    const previous = { profilePhoto: doc.profilePhoto };
+
+    doc.set(pickFields(req.body, FIELDS));
+
+    IMAGES.forEach((field, i) => {
+      previous[field] = doc[field];
+      if (newPaths[i]) doc[field] = newPaths[i];
+      else if (req.body[`remove${field[0].toUpperCase()}${field.slice(1)}`] === 'true') doc[field] = '';
+    });
+
+    if (photoFile) {
+      const stored = await StoredFile.create({
+        data: photoFile.buffer,
+        contentType: photoType,
+        size: photoFile.size,
+        purpose: 'visiting-card/profile-photo',
+      });
+      newPhotoId = stored.id;
+      doc.profilePhoto = newPhotoId;
+    } else if (req.body.removeProfilePhoto === 'true') {
+      doc.profilePhoto = '';
+    }
+
     await doc.save();
+
+    // Saved: the files this update replaced or removed are no longer referenced
+    IMAGES.forEach((field) => {
+      if (previous[field] && previous[field] !== doc[field]) removeUpload(previous[field]);
+    });
+    if (previous.profilePhoto && previous.profilePhoto !== doc.profilePhoto) removeStoredFile(previous.profilePhoto);
+
+    res.json({ success: true, message: 'Visiting card updated', data: withDefaults(doc) });
   } catch (err) {
     newPaths.forEach(removeUpload);
+    removeStoredFile(newPhotoId);
     throw err;
   }
-
-  IMAGES.forEach((field) => {
-    if (previous[field] && previous[field] !== doc[field]) removeUpload(previous[field]);
-  });
-
-  res.json({ success: true, message: 'Visiting card updated', data: withDefaults(doc) });
 });

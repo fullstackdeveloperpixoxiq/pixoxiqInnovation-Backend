@@ -5,6 +5,7 @@ import serviceController from '../controllers/serviceController.js';
 import { submitMessage } from '../controllers/messageController.js';
 import { submitApplication } from '../controllers/applicationController.js';
 import { getPublicCard } from '../controllers/visitingCardController.js';
+import { getFile } from '../controllers/fileController.js';
 import { formLimiter } from '../middleware/rateLimit.js';
 
 // Unauthenticated endpoints consumed by the public website
@@ -16,6 +17,7 @@ router.get('/services', serviceController.listPublic);
 router.get('/services/:slug', serviceController.getPublicBySlug);
 
 router.get('/visiting-card', getPublicCard);
+router.get('/files/:id', getFile);
 
 router.post('/contact', formLimiter, submitMessage);
 router.post('/applications', formLimiter, submitApplication);
