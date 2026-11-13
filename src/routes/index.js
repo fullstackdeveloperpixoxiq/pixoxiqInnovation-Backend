@@ -1,10 +1,11 @@
 import { Router } from 'express';
-import { protect } from '../middleware/auth.js';
+import { protect, authorize } from '../middleware/auth.js';
 import { createUploader } from '../middleware/upload.js';
 import vacancyController from '../controllers/vacancyController.js';
 import certificateController from '../controllers/certificateController.js';
 import serviceController from '../controllers/serviceController.js';
 import { getStats } from '../controllers/dashboardController.js';
+import { getCard, updateCard } from '../controllers/visitingCardController.js';
 import resourceRouter from './resourceRouter.js';
 import authRoutes from './authRoutes.js';
 import publicRoutes from './publicRoutes.js';
@@ -26,6 +27,8 @@ router.use(
   protect,
   resourceRouter(certificateController, { uploadMiddleware: createUploader('certificates').single('image') })
 );
+router.get('/visiting-card', protect, getCard);
+router.put('/visiting-card', protect, authorize('superadmin'), updateCard);
 router.use('/messages', protect, messageRoutes);
 router.use('/applications', protect, applicationRoutes);
 
