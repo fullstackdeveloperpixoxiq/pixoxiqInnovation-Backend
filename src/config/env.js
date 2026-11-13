@@ -18,10 +18,14 @@ const env = {
   mongoUri: process.env.MONGO_URI,
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
-  clientUrls: (process.env.CLIENT_URLS || 'http://localhost:5173')
-    .split(',')
-    .map((url) => url.trim())
-    .filter(Boolean),
+  // Deployed admin panel is always allowed; CLIENT_URLS adds more (comma-separated)
+  clientUrls: [
+    ...new Set(
+      ['https://pixoxiqinnovation-adminpanel.onrender.com', ...(process.env.CLIENT_URLS || 'http://localhost:5173').split(',')]
+        .map((url) => url.trim().replace(/\/+$/, ''))
+        .filter(Boolean)
+    ),
+  ],
   apiPublicUrl: (process.env.API_PUBLIC_URL || `http://localhost:${port}`).replace(/\/$/, ''),
   seedAdmin: {
     name: process.env.SEED_ADMIN_NAME || 'Pixoxiq Admin',
