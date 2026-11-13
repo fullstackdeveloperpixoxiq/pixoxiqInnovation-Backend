@@ -10,6 +10,7 @@ import authRoutes from './authRoutes.js';
 import publicRoutes from './publicRoutes.js';
 import messageRoutes from './messageRoutes.js';
 import applicationRoutes from './applicationRoutes.js';
+import visitingCardRoutes from './visitingCardRoutes.js';
 
 const router = Router();
 
@@ -28,5 +29,6 @@ router.use(
 );
 router.use('/messages', protect, messageRoutes);
 router.use('/applications', protect, applicationRoutes);
+router.use('/visiting-card', protect, visitingCardRoutes);
 
 export default router;
