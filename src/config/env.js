@@ -27,6 +27,20 @@ const env = {
     ),
   ],
   apiPublicUrl: (process.env.API_PUBLIC_URL || `http://localhost:${port}`).replace(/\/$/, ''),
+  // AI assistant. There is deliberately NO default AI provider or model here: both are chosen
+  // by a superadmin in the admin panel and stored (API keys encrypted) in the database.
+  ai: {
+    // 32-byte key (64 hex chars or base64) used to encrypt provider API keys at rest.
+    // AI configuration cannot be saved until this is set.
+    encryptionKey: process.env.AI_ENCRYPTION_KEY || '',
+    // Per-IP limits for the public chat endpoints
+    chatRequestsPerMinute: Number(process.env.CHAT_RATE_LIMIT_PER_MINUTE) || 12,
+    sessionsPerHour: Number(process.env.CHAT_SESSIONS_PER_HOUR) || 30,
+    // Timeout for a single provider request (ms)
+    providerTimeoutMs: Number(process.env.AI_PROVIDER_TIMEOUT_MS) || 90000,
+    // Max upload size for knowledge base documents (MB)
+    maxDocumentMb: Number(process.env.KNOWLEDGE_MAX_FILE_MB) || 10,
+  },
   seedAdmin: {
     name: process.env.SEED_ADMIN_NAME || 'Pixoxiq Admin',
     email: process.env.SEED_ADMIN_EMAIL || 'admin@pixoxiq.com',

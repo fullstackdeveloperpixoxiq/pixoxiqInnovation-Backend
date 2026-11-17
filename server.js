@@ -1,9 +1,11 @@
 import env from './src/config/env.js';
 import connectDB from './src/config/db.js';
 import app from './src/app.js';
+import { startAiBackgroundJobs } from './src/ai/maintenance.js';
 
 const start = async () => {
   await connectDB();
+  startAiBackgroundJobs();
 
   const server = app.listen(env.port, () => {
     console.log(`🚀 API running on http://localhost:${env.port} (${env.nodeEnv})`);
