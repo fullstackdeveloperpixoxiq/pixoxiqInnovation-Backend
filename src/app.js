@@ -17,20 +17,28 @@ app.set('trust proxy', 1);
 // Uploaded images are loaded by the public site from a different origin
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
-app.use(
-  cors({
-    origin(origin, callback) {
-      // Allow server-to-server / curl requests (no origin) and configured clients
-      if (!origin || env.clientUrls.includes(origin)) return callback(null, true);
-      // In development allow any localhost port (Vite picks a free port)
-      if (!env.isProd && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
-        return callback(null, true);
-      }
-      return callback(new Error(`Origin ${origin} not allowed by CORS`));
-    },
-    credentials: true,
-  })
-);
+const corsOptions = {
+  origin(origin, callback) {
+    // Allow server-to-server / curl requests (no origin) and configured clients
+    if (!origin || env.clientUrls.includes(origin.replace(/\/+$/, ''))) return callback(null, true);
+    // In development allow any localhost port (Vite picks a free port)
+    if (!env.isProd && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
+      return callback(null, true);
+    }
+    // Unknown origin: send no CORS headers (browser blocks it) instead of a 500
+    return callback(null, false);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  maxAge: 86400,
+  optionsSuccessStatus: 204,
+};
+
+// CORS must run before body parsing, routes and auth so preflights never hit `protect`
+app.use(cors(corsOptions));
+// Disallowed-origin preflights get an empty 204 without CORS headers (browser blocks them)
+app.use((req, res, next) => (req.method === 'OPTIONS' ? res.sendStatus(204) : next()));
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));

@@ -1,7 +1,8 @@
 import VisitingCard from '../models/VisitingCard.js';
 import ApiError from '../utils/ApiError.js';
 import asyncHandler from '../utils/asyncHandler.js';
-import { removeUpload } from '../middleware/upload.js';
+import StoredFile from '../models/StoredFile.js';
+import { removeUpload, sniffImageType } from '../middleware/upload.js';
 import { pickFields } from './crudFactory.js';
 
 const FIELDS = [
@@ -25,7 +26,12 @@ const toPublic = (card) => {
   return rest;
 };
 
-const uploadedPath = (file) => (file ? `visiting-card/${file.filename}` : undefined);
+// Deletes a photo that is no longer used: a StoredFile id, or a legacy path in /uploads
+const removePhoto = (value) => {
+  if (!value) return;
+  if (value.includes('/')) return removeUpload(value);
+  StoredFile.deleteOne({ _id: value }).catch(() => {});
+};
 
 // The admin form is multipart (it may carry a photo), so documents arrive as a JSON string
 const parseDocuments = (raw) => {
@@ -72,15 +78,26 @@ export const getCard = asyncHandler(async (req, res) => {
 
 // Superadmin only
 export const updateCard = asyncHandler(async (req, res) => {
-  const newPhoto = uploadedPath(req.file);
-  if (req.file?.mimetype === 'application/pdf') {
-    removeUpload(newPhoto);
-    throw ApiError.badRequest('Profile picture must be an image (JPG, PNG, WEBP or SVG)');
-  }
+  // The photo arrives in memory (see routes/visitingCardRoutes.js) and is stored in the database
+  const photoFile = req.file;
+  const photoType = photoFile && sniffImageType(photoFile.buffer);
+  if (photoFile && !photoType) throw ApiError.badRequest('Profile picture must be a valid JPG, PNG or WEBP image');
+
   let card;
   let previousPhoto;
+  let newPhoto;
 
   try {
+    if (photoFile) {
+      const stored = await StoredFile.create({
+        data: photoFile.buffer,
+        contentType: photoType,
+        size: photoFile.size,
+        purpose: 'visiting-card/profile-photo',
+      });
+      newPhoto = stored.id;
+    }
+
     card = await VisitingCard.getSingleton();
     previousPhoto = card.photo;
 
@@ -96,11 +113,11 @@ export const updateCard = asyncHandler(async (req, res) => {
     card.updatedBy = req.admin._id;
     await card.save();
   } catch (err) {
-    if (newPhoto) removeUpload(newPhoto);
+    removePhoto(newPhoto);
     throw err;
   }
 
-  if (previousPhoto && previousPhoto !== card.photo) removeUpload(previousPhoto);
+  if (previousPhoto && previousPhoto !== card.photo) removePhoto(previousPhoto);
   await card.populate('updatedBy', 'name');
   res.json({ success: true, message: 'Visiting card updated', data: card });
 });

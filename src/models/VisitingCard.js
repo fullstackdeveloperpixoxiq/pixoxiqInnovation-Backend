@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import env from '../config/env.js';
 import { toJSONPlugin, fileUrl } from './plugins.js';
 
 // Empty string allowed (link not set)
@@ -78,14 +79,20 @@ const visitingCardSchema = new mongoose.Schema(
       twitter: { type: String, trim: true, maxlength: 300, match: [socialUrl, 'X (Twitter) link must start with http:// or https://'], default: '' },
       youtube: { type: String, trim: true, maxlength: 300, match: [socialUrl, 'YouTube link must start with http:// or https://'], default: '' },
     },
-    // Profile picture: relative path inside /uploads (e.g. "visiting-card/123.png")
+    // Profile picture: id of a StoredFile (kept in the database so it survives redeploys).
+    // Older records may hold a relative path inside /uploads instead.
     photo: { type: String, default: '' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
   },
   { timestamps: true }
 );
 
+// The StoredFile id changes with every upload, so a replaced photo always gets a new URL
 visitingCardSchema.virtual('photoUrl').get(function photoUrl() {
+  if (!this.photo) return null;
+  if (mongoose.isValidObjectId(this.photo) && !this.photo.includes('/')) {
+    return `${env.apiPublicUrl}/api/public/files/${this.photo}`;
+  }
   return fileUrl(this.photo);
 });
 
