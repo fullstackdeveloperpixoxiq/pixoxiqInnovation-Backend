@@ -28,7 +28,13 @@ router.use(
   resourceRouter(certificateController, { uploadMiddleware: createUploader('certificates').single('image') })
 );
 router.get('/visiting-card', protect, getCard);
-router.put('/visiting-card', protect, authorize('superadmin'), updateCard);
+router.put(
+  '/visiting-card',
+  protect,
+  authorize('superadmin'),
+  createUploader('visiting-card').single('photo'),
+  updateCard
+);
 router.use('/messages', protect, messageRoutes);
 router.use('/applications', protect, applicationRoutes);
 
