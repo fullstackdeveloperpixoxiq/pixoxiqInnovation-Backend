@@ -82,3 +82,25 @@ export const removeUpload = (relativePath) => {
   if (!full.startsWith(UPLOAD_ROOT)) return;
   fs.promises.unlink(full).catch(() => {});
 };
+
+// Knowledge base documents: kept in memory only long enough to extract their text (the file
+// itself is not stored). The real file type is verified from its content by ai/textExtract.js.
+export const createDocumentUploader = ({ maxMb, extensions }) => {
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: maxMb * 1024 * 1024, files: 1 },
+    fileFilter: (req, file, cb) => {
+      if (extensions.includes(path.extname(file.originalname || '').toLowerCase())) return cb(null, true);
+      cb(ApiError.badRequest(`Unsupported file type. Allowed: ${extensions.join(', ')}`));
+    },
+  }).single('file');
+
+  // Turn multer's size error into a message with the real limit
+  return (req, res, next) =>
+    upload(req, res, (err) => {
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        return next(ApiError.badRequest(`File is too large (max ${maxMb} MB)`));
+      }
+      next(err);
+    });
+};

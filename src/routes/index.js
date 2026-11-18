@@ -13,10 +13,13 @@ import publicRoutes from './publicRoutes.js';
 import messageRoutes from './messageRoutes.js';
 import applicationRoutes from './applicationRoutes.js';
 import visitingCardRoutes from './visitingCardRoutes.js';
+import chatRoutes from './chatRoutes.js';
+import aiRoutes from './aiRoutes.js';
 
 const router = Router();
 
 // Public
+router.use('/public/chat', chatRoutes);
 router.use('/public', publicRoutes);
 router.use('/auth', authRoutes);
 
@@ -57,5 +60,6 @@ router.use(
 router.use('/messages', protect, messageRoutes);
 router.use('/applications', protect, applicationRoutes);
 router.use('/visiting-card', protect, visitingCardRoutes);
+router.use('/ai', protect, aiRoutes);
 
 export default router;
