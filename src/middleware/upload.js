@@ -8,7 +8,7 @@ import ApiError from '../utils/ApiError.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const UPLOAD_ROOT = path.join(__dirname, '..', '..', 'uploads');
 
-const ALLOWED = {
+export const ALLOWED = {
   'image/jpeg': '.jpg',
   'image/png': '.png',
   'image/webp': '.webp',
@@ -28,10 +28,21 @@ export const sniffImageType = (buffer) => {
   return null;
 };
 
+// Detects the real type of any accepted upload (JPG, PNG, WEBP, SVG, PDF) from its content
+export const sniffFileType = (buffer) => {
+  const image = sniffImageType(buffer);
+  if (image) return image;
+  if (!buffer || buffer.length < 5) return null;
+  if (buffer.toString('latin1', 0, 5) === '%PDF-') return 'application/pdf';
+  const head = buffer.toString('utf8', 0, Math.min(buffer.length, 2048)).replace(/^﻿/, '');
+  if (/^\s*(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*(<!DOCTYPE svg[^>]*>\s*)?<svg[\s>]/i.test(head)) return 'image/svg+xml';
+  return null;
+};
+
 // Creates a multer instance that stores files in uploads/<folder>.
-// Fields listed in `databaseFields` are images kept in memory (file.buffer) instead, for the
-// controller to save in the database.
-export const createUploader = (folder, { databaseFields = [] } = {}) => {
+// Fields listed in `databaseFields` are kept in memory (file.buffer) instead, for the
+// controller to save in the database. `databaseTypes` lists the MIME types those fields accept.
+export const createUploader = (folder, { databaseFields = [], databaseTypes = DATABASE_IMAGE_TYPES } = {}) => {
   const dest = path.join(UPLOAD_ROOT, folder);
   fs.mkdirSync(dest, { recursive: true });
 
@@ -53,8 +64,10 @@ export const createUploader = (folder, { databaseFields = [] } = {}) => {
     limits: { fileSize: 5 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
       if (inDatabase(file)) {
-        if (DATABASE_IMAGE_TYPES.includes(file.mimetype)) return cb(null, true);
-        return cb(ApiError.badRequest('Only JPG, PNG or WEBP images are allowed'));
+        if (databaseTypes.includes(file.mimetype)) return cb(null, true);
+        return cb(ApiError.badRequest(databaseTypes === DATABASE_IMAGE_TYPES
+          ? 'Only JPG, PNG or WEBP images are allowed'
+          : 'Only JPG, PNG, WEBP, SVG or PDF files are allowed'));
       }
       if (ALLOWED[file.mimetype]) return cb(null, true);
       cb(ApiError.badRequest('Only JPG, PNG, WEBP, SVG or PDF files are allowed'));

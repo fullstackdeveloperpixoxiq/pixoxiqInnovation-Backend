@@ -1,4 +1,4 @@
-import VisitingCard from '../models/VisitingCard.js';
+import VisitingCard, { PERSONAL_SOCIALS } from '../models/VisitingCard.js';
 import ApiError from '../utils/ApiError.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import StoredFile from '../models/StoredFile.js';
@@ -49,7 +49,7 @@ const parseDocuments = (raw) => {
 const SOCIALS = ['instagram', 'facebook', 'linkedin', 'twitter', 'youtube'];
 
 // Socials also arrive as a JSON string from the multipart form
-const parseSocials = (raw) => {
+const parseSocials = (raw, keys = SOCIALS) => {
   if (raw === undefined) return undefined;
   let parsed = raw;
   if (typeof raw === 'string') {
@@ -62,7 +62,7 @@ const parseSocials = (raw) => {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw ApiError.badRequest('Social links must be a JSON object');
   }
-  return Object.fromEntries(SOCIALS.map((key) => [key, typeof parsed[key] === 'string' ? parsed[key] : '']));
+  return Object.fromEntries(keys.map((key) => [key, typeof parsed[key] === 'string' ? parsed[key] : '']));
 };
 
 export const getPublicCard = asyncHandler(async (req, res) => {
@@ -106,6 +106,8 @@ export const updateCard = asyncHandler(async (req, res) => {
     if (documents) card.documents = documents;
     const socials = parseSocials(req.body.socials);
     if (socials) card.socials = socials;
+    const personalSocials = parseSocials(req.body.personalSocials, PERSONAL_SOCIALS);
+    if (personalSocials) card.personalSocials = personalSocials;
 
     if (newPhoto) card.photo = newPhoto;
     else if (req.body.removePhoto === 'true') card.photo = '';

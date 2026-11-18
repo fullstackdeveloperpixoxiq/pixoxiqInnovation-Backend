@@ -12,6 +12,11 @@ export const getFile = asyncHandler(async (req, res) => {
   res.set({
     'Content-Type': file.contentType,
     'Cache-Control': 'public, max-age=31536000, immutable',
+    'X-Content-Type-Options': 'nosniff',
   });
+  // Stops scripts inside an uploaded SVG from running on the API origin
+  if (file.contentType === 'image/svg+xml') {
+    res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+  }
   res.send(file.data);
 });
