@@ -1,6 +1,6 @@
-# PIXOXIQ AI Assistant
+# Pixpi AI
 
-The PIXOXIQ AI Assistant is the company's virtual assistant on the public website. It answers questions about PIXOXIQ using **only** the verified information in its knowledge base (retrieval-augmented generation). It is separate from the Carmana ERP and Ostik chatbots.
+The Pixpi AI is the company's virtual assistant on the public website. It answers questions about PIXOXIQ using **only** the verified information in its knowledge base (retrieval-augmented generation). It is separate from the Carmana ERP and Ostik chatbots.
 
 It spans three repositories:
 

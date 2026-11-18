@@ -1,18 +1,18 @@
 import mongoose from 'mongoose';
 import { toJSONPlugin } from './plugins.js';
 
-// Behaviour of the PIXOXIQ AI Assistant (single document). The assistant is disabled
+// Behaviour of the Pixpi AI (single document). The assistant is disabled
 // until a superadmin enables it. Nothing here selects an AI provider or model.
 const chatSettingsSchema = new mongoose.Schema(
   {
     key: { type: String, default: 'default', unique: true },
     enabled: { type: Boolean, default: false },
-    assistantName: { type: String, trim: true, maxlength: 60, default: 'PIXOXIQ AI Assistant' },
+    assistantName: { type: String, trim: true, maxlength: 60, default: 'Pixpi AI' },
     welcomeMessage: {
       type: String,
       trim: true,
       maxlength: 600,
-      default: "Hi! I'm the PIXOXIQ AI Assistant. Ask me about our company, services, projects or how to get in touch.",
+      default: "Hi! I'm the Pixpi AI. Ask me about our company, services, projects or how to get in touch.",
     },
     suggestedQuestions: {
       type: [{ type: String, trim: true, maxlength: 120 }],

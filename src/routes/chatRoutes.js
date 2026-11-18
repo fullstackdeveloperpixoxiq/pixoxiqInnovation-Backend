@@ -3,6 +3,7 @@ import { chatLimiter, chatSessionLimiter } from '../middleware/rateLimit.js';
 import {
   requireVisitor,
   getStatus,
+  getUsage,
   createSession,
   listConversations,
   getConversation,
@@ -18,6 +19,7 @@ router.get('/status', getStatus);
 router.post('/session', chatSessionLimiter, createSession);
 
 router.use(requireVisitor);
+router.get('/usage', getUsage);
 router.get('/conversations', listConversations);
 router.route('/conversations/:id').get(getConversation).delete(deleteConversation);
 router.post('/conversations/:id/regenerate', chatLimiter, regenerate);
