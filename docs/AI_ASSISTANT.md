@@ -28,6 +28,8 @@ Admin panel (Render)           │        └─ configService.getChatClient ─
 ### No default model
 * No provider, model or API key exists in code or environment variables. A **superadmin** picks a provider and enters/selects a model id in the admin panel.
 * Every save runs a live validation: credentials → model is in the provider's model list → a real request to the model. A configuration that fails is **not saved**.
+* The live request uses the same generation parameters as real chats (the Chatbot Settings temperature). Changing the temperature later is also checked against the active model, so a model that rejects a custom temperature (for example OpenAI reasoning models) can never be left in a state where every chat fails.
+* Reasoning/thinking models (OpenAI o-series/GPT-5, Gemini 2.5, ...) spend part of *Max output tokens* on hidden reasoning. If an answer comes back empty because the budget ran out, the AI log says so: raise *Max output tokens* in Chatbot Settings.
 * If nothing is configured, the website hides the widget and the API answers `503` with a clear configuration error (and logs it).
 * If the provider fails while answering, the error is logged and the visitor sees a generic message. **There is no retry with, or switch to, another model.**
 
@@ -79,7 +81,7 @@ All responses use the existing `{ success, data, message }` envelope.
 | GET | `/conversations/:id` | Own conversation + messages |
 | DELETE | `/conversations/:id` | Delete own conversation |
 | POST | `/messages` | `{ message, conversationId? }` → SSE stream (`?stream=0` for JSON). 12/min/IP + daily per-visitor cap |
-| POST | `/conversations/:id/regenerate` | Replace the last answer (SSE) |
+| POST | `/conversations/:id/regenerate` | Replace the last answer (SSE). The previous answer is only deleted once the new one is stored, so a failed regeneration keeps it |
 
 SSE events: `meta {conversation}` → `sources [{title, category}]` → `delta {text}`… → `done {message, conversation}` or `error {message}`.
 

@@ -121,8 +121,25 @@ export const getConfigSummary = async () => {
 
 const modelMatches = (id, model) => id === model || id === `models/${model}` || id.endsWith(`/${model}`);
 
+// Finish reasons meaning "ran out of output tokens" (OpenAI-style, Anthropic, Gemini)
+const TOKEN_LIMIT_REASONS = ['length', 'max_tokens', 'MAX_TOKENS'];
+export const hitTokenLimit = (finishReason) => TOKEN_LIMIT_REASONS.includes(finishReason);
+export const TOKEN_LIMIT_HINT =
+  'The model used its whole output token budget without producing text. Reasoning/thinking models spend part of that budget on hidden reasoning: raise "Max output tokens" in Chatbot Settings.';
+
+// The chat request that validation sends: the same generation parameters real chats use, so
+// a model that rejects them (e.g. a custom temperature) fails here instead of in production.
+export const liveChatCheck = (client, { temperature } = {}) =>
+  client.chat({
+    system: 'You are a connectivity test. Follow the instruction exactly.',
+    messages: [{ role: 'user', content: 'Reply with the single word: OK' }],
+    temperature: typeof temperature === 'number' ? temperature : undefined,
+    maxTokens: 256,
+  });
+
 // Live validation of credentials + model. Returns a report; never throws for provider errors.
-export const validateTarget = async ({ purpose, provider, model, baseUrl, apiKey }) => {
+// `temperature` is the one from Chatbot Settings (null/undefined = provider default).
+export const validateTarget = async ({ purpose, provider, model, baseUrl, apiKey, temperature }) => {
   const steps = [];
   const started = Date.now();
   const report = (ok, extra = {}) => ({ ok, steps, latencyMs: Date.now() - started, ...extra });
@@ -175,19 +192,17 @@ export const validateTarget = async ({ purpose, provider, model, baseUrl, apiKey
       steps.push({ name: 'Live request', ok: true, message: `Embedding returned ${vectors[0].length} dimensions` });
       return report(true, { dimensions: vectors[0].length, modelCount, message: 'Connection successful' });
     }
-    const result = await client.chat({
-      system: 'You are a connectivity test. Follow the instruction exactly.',
-      messages: [{ role: 'user', content: 'Reply with the single word: OK' }],
-      maxTokens: 256,
-    });
+    const result = await liveChatCheck(client, { temperature });
     const sample = (result.text || '').trim().slice(0, 120);
-    steps.push({
-      name: 'Live request',
-      ok: true,
-      message: sample ? `Model replied: "${sample}"` : `Model responded (finish reason: ${result.finishReason || 'unknown'})`,
-    });
+    let message = sample ? `Model replied: "${sample}"` : `Model responded (finish reason: ${result.finishReason || 'unknown'})`;
+    if (!sample && hitTokenLimit(result.finishReason)) message += `. Note: ${TOKEN_LIMIT_HINT}`;
+    steps.push({ name: 'Live request', ok: true, message });
     return report(true, { sample, usage: result.usage, modelCount, message: 'Connection successful' });
   } catch (err) {
-    return fail('Live request', err.message || 'Request failed');
+    const hint =
+      typeof temperature === 'number'
+        ? ` (The temperature ${temperature} from Chatbot Settings was included in this test. If the model does not accept it, clear the temperature there to use the provider default.)`
+        : '';
+    return fail('Live request', `${err.message || 'Request failed'}${hint}`);
   }
 };

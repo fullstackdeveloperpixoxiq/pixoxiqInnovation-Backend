@@ -5,9 +5,9 @@ import ApiError from '../utils/ApiError.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import { pickFields } from './crudFactory.js';
 import { decryptSecret, encryptSecret, isEncryptionConfigured } from '../ai/crypto.js';
-import { buildClient, embeddingKeyOf, invalidateAiConfig, validateTarget } from '../ai/configService.js';
+import { buildClient, embeddingKeyOf, getChatClient, invalidateAiConfig, liveChatCheck, validateTarget } from '../ai/configService.js';
 import { getProvider, publicCatalog } from '../ai/providers/index.js';
-import { generateReply, invalidateChatSettings, sanitizeUserMessage } from '../ai/chatService.js';
+import { generateReply, getChatSettings, invalidateChatSettings, sanitizeUserMessage } from '../ai/chatService.js';
 import { reindexAll } from '../ai/indexer.js';
 import { logAi } from '../ai/logger.js';
 import { redact } from '../ai/redact.js';
@@ -71,6 +71,9 @@ const resolveInput = (body, stored) => {
   return { provider, def, model, baseUrl, apiKey, keyIsNew };
 };
 
+// The chat model is validated with the temperature real chats will send
+const validationParams = async (purpose) => (purpose === 'chat' ? { temperature: (await getChatSettings()).temperature } : {});
+
 export const getProviders = asyncHandler(async (req, res) => {
   res.json({ success: true, data: publicCatalog() });
 });
@@ -109,7 +112,7 @@ export const testConfig = asyncHandler(async (req, res) => {
   const stored = config[purpose];
   const input = resolveInput(req.body, stored);
 
-  const report = await validateTarget({ purpose, ...input });
+  const report = await validateTarget({ purpose, ...input, ...(await validationParams(purpose)) });
 
   // Testing the saved configuration refreshes its status on the dashboard
   const isSaved =
@@ -143,7 +146,7 @@ export const saveTarget = asyncHandler(async (req, res) => {
   const input = resolveInput(req.body, stored);
 
   // Never save a configuration that has not passed a live check
-  const report = await validateTarget({ purpose, ...input });
+  const report = await validateTarget({ purpose, ...input, ...(await validationParams(purpose)) });
   if (!report.ok) {
     await logAi({
       level: 'warn',
@@ -229,6 +232,10 @@ export const updateSettings = asyncHandler(async (req, res) => {
   const data = pickFields(req.body, SETTINGS_FIELDS);
   if (data.temperature === '' || data.temperature === undefined) delete data.temperature;
   if (req.body.temperature === null || req.body.temperature === '') data.temperature = null;
+  if (typeof data.temperature === 'string') {
+    data.temperature = Number(data.temperature);
+    if (Number.isNaN(data.temperature)) throw ApiError.badRequest('Temperature must be a number');
+  }
   if (data.suggestedQuestions !== undefined && !Array.isArray(data.suggestedQuestions)) {
     throw ApiError.badRequest('suggestedQuestions must be a list');
   }
@@ -241,6 +248,36 @@ export const updateSettings = asyncHandler(async (req, res) => {
     const config = await AiConfig.getSingleton();
     if (!config.chat?.provider || !config.chat?.model) {
       throw ApiError.badRequest('Configure an AI provider and model before enabling the assistant.');
+    }
+  }
+
+  // A new temperature must be accepted by the active chat model, otherwise every chat would fail
+  const newTemperature = data.temperature;
+  if (typeof newTemperature === 'number' && newTemperature !== settings.temperature) {
+    if (newTemperature < 0 || newTemperature > 2) throw ApiError.badRequest('Temperature must be between 0 and 2');
+    let client = null;
+    try {
+      client = await getChatClient();
+    } catch {
+      /* no chat model yet: it will be validated with this temperature when one is saved */
+    }
+    if (client) {
+      try {
+        await liveChatCheck(client, { temperature: newTemperature });
+      } catch (err) {
+        const message = redact(err.message || 'Request failed', client.secrets);
+        await logAi({
+          level: 'warn',
+          source: 'config',
+          message: `Rejected temperature ${newTemperature}: ${message}`,
+          provider: client.provider,
+          model: client.model,
+          secrets: client.secrets,
+        });
+        throw ApiError.badRequest(
+          `Settings not saved: the active model (${client.model}) rejected temperature ${newTemperature}. Leave the temperature empty to use the provider default. Provider message: ${message}`
+        );
+      }
     }
   }
 

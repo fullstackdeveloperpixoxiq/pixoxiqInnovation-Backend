@@ -5,7 +5,7 @@ import ChatMessage from '../models/ChatMessage.js';
 import ApiError from '../utils/ApiError.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import { sha256 } from '../ai/crypto.js';
-import { getChatClient, getConfigSummary } from '../ai/configService.js';
+import { getChatClient, getConfigSummary, hitTokenLimit, TOKEN_LIMIT_HINT } from '../ai/configService.js';
 import {
   generateReply,
   getChatSettings,
@@ -90,7 +90,9 @@ const publicErrorMessage = (err) => {
 
 // Generates the assistant reply and streams it as Server-Sent Events (or JSON with ?stream=0).
 // Events: meta, sources, delta, done, error.
-const respond = async (req, res, { conversation, history, message, visitorHash, regenerated = false }) => {
+// `replaces`: the previous answer being regenerated. It is only deleted once the new answer
+// has been stored, so a failed regeneration never loses the existing answer.
+const respond = async (req, res, { conversation, history, message, visitorHash, regenerated = false, replaces = null }) => {
   const streaming = req.query.stream !== '0';
   const controller = new AbortController();
   res.on('close', () => {
@@ -139,7 +141,9 @@ const respond = async (req, res, { conversation, history, message, visitorHash, 
       await logAi({
         level: 'warn',
         source: 'chat',
-        message: `The model returned an empty answer (finish reason: ${result.finishReason || 'unknown'})`,
+        message: `The model returned an empty answer (finish reason: ${result.finishReason || 'unknown'})${
+          hitTokenLimit(result.finishReason) ? `. ${TOKEN_LIMIT_HINT}` : ''
+        }`,
         provider: result.provider,
         model: result.model,
         context: { conversationId: String(conversation._id) },
@@ -161,8 +165,9 @@ const respond = async (req, res, { conversation, history, message, visitorHash, 
       finishReason: result.finishReason || undefined,
       regenerated,
     });
+    if (replaces) await replaces.deleteOne();
 
-    conversation.messageCount += 1;
+    if (!replaces) conversation.messageCount += 1;
     conversation.lastMessageAt = new Date();
     conversation.totalInputTokens += result.usage?.inputTokens || 0;
     conversation.totalOutputTokens += result.usage?.outputTokens || 0;
@@ -190,7 +195,8 @@ const respond = async (req, res, { conversation, history, message, visitorHash, 
           interrupted: true,
           regenerated,
         }).catch(() => {});
-        conversation.messageCount += 1;
+        if (replaces) await replaces.deleteOne().catch(() => {});
+        else conversation.messageCount += 1;
         conversation.lastMessageAt = new Date();
         await conversation.save().catch(() => {});
       }
@@ -297,10 +303,6 @@ export const regenerate = asyncHandler(async (req, res) => {
 
   const last = await ChatMessage.findOne({ conversation: conversation._id }).sort({ createdAt: -1, _id: -1 });
   if (!last) throw ApiError.badRequest('Nothing to regenerate');
-  if (last.role === 'assistant') {
-    await last.deleteOne();
-    conversation.messageCount = Math.max(0, conversation.messageCount - 1);
-  }
   const lastUser = await ChatMessage.findOne({ conversation: conversation._id, role: 'user' }).sort({ createdAt: -1, _id: -1 });
   if (!lastUser) throw ApiError.badRequest('Nothing to regenerate');
 
@@ -311,5 +313,6 @@ export const regenerate = asyncHandler(async (req, res) => {
     message: lastUser.content,
     visitorHash: req.visitorHash,
     regenerated: true,
+    replaces: last.role === 'assistant' ? last : null,
   });
 });
