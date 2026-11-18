@@ -32,8 +32,9 @@ const buildIndex = async () => {
   const target = version;
   // Chunks of entries being re-indexed stay searchable until they are replaced. Chunks of
   // edited content are deleted as soon as the edit is saved (knowledgeController).
-  const activeIds = await KnowledgeEntry.find({ isActive: true }).distinct('_id');
-  const rows = await KnowledgeChunk.find({ entry: { $in: activeIds } })
+  const active = await KnowledgeEntry.find({ isActive: true }).select('sourceType').lean();
+  const sourceTypeOf = new Map(active.map((e) => [String(e._id), e.sourceType]));
+  const rows = await KnowledgeChunk.find({ entry: { $in: active.map((e) => e._id) } })
     .select('entry title category text embedding embeddingKey')
     .lean();
 
@@ -48,6 +49,7 @@ const buildIndex = async () => {
     return {
       id: String(r._id),
       entry: String(r.entry),
+      sourceType: sourceTypeOf.get(String(r.entry)) || 'manual',
       title: r.title,
       category: r.category,
       text: r.text,
@@ -103,8 +105,9 @@ const dot = (a, b) => {
  * @param {object|null} opts.embeddingClient  from configService.getEmbeddingClient()
  * @returns {Promise<{ mode: 'hybrid'|'keyword', results: Array }>}
  */
-export const searchKnowledge = async (query, { topK = 6, minRelevance = 0.2, embeddingClient = null, signal } = {}) => {
-  const idx = await getIndex();
+export const searchKnowledge = async (query, { topK = 6, minRelevance = 0.2, embeddingClient = null, signal, excludeSourceTypes = [] } = {}) => {
+  const full = await getIndex();
+  const idx = excludeSourceTypes.length ? { ...full, chunks: full.chunks.filter((c) => !excludeSourceTypes.includes(c.sourceType)) } : full;
   const mode = embeddingClient ? 'hybrid' : 'keyword';
   if (!idx.chunks.length || !String(query).trim()) return { mode, results: [] };
 

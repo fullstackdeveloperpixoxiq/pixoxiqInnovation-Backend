@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { trackChanges } from '../utils/changeTracker.js';
 import { toJSONPlugin, fileUrl, LUCIDE_ICON_DEFAULT } from './plugins.js';
 
 const certificateSchema = new mongoose.Schema(
@@ -31,5 +32,7 @@ certificateSchema.virtual('isExpired').get(function isExpired() {
 });
 
 certificateSchema.plugin(toJSONPlugin);
+// The AI assistant reads this content live: any change refreshes its company data
+trackChanges(certificateSchema);
 
 export default mongoose.model('Certificate', certificateSchema);

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { trackChanges } from '../utils/changeTracker.js';
 import env from '../config/env.js';
 import { toJSONPlugin, fileUrl } from './plugins.js';
 
@@ -102,5 +103,7 @@ visitingCardSchema.statics.getSingleton = async function getSingleton() {
 };
 
 visitingCardSchema.plugin(toJSONPlugin);
+// The AI assistant reads this content live: any change refreshes its company data
+trackChanges(visitingCardSchema);
 
 export default mongoose.model('VisitingCard', visitingCardSchema);

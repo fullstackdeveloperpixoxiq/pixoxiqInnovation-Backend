@@ -50,6 +50,14 @@ Admin panel (Render)           │        └─ configService.getChatClient ─
 
 The vector index is kept in memory and rebuilt on change. This suits a company knowledge base (up to tens of thousands of chunks on one instance). For a much larger corpus or several backend instances, replace the body of `searchKnowledge()` with MongoDB Atlas Vector Search; callers do not change.
 
+### Live company data (`src/ai/companyData.js`)
+Structured website content is **not** taken from vector search. For every question the assistant reads the published records straight from the existing collections (`services`, `visitingcards`, plus `certificates` / `vacancies` when the question is about them) and puts them first in the model context:
+* the complete list of published services (title, description, features, page link), so "what services do you offer?" always lists all of them;
+* full details (`content`) of up to 3 services the question names;
+* contact details and the company "about" text from the visiting card.
+
+Only `isActive: true` records are used. Mongoose hooks on these models (`utils/changeTracker.js`) refresh the cache on any create/update/delete/publish toggle/reorder, with a 60-second safety expiry, so admin changes apply to the next question with no manual sync. Knowledge entries created by the older **Sync website content** button (`sourceType: website`) are skipped in search, so they can never duplicate or contradict the live data. The knowledge base remains the place for information that has no website module (company profile documents, projects, technologies, FAQs).
+
 ### Conversation context
 * Only the last **N messages** are sent (Chatbot Settings → History window, default 10).
 * Older messages are folded into a **rolling summary** (stored on the conversation) using the same configured model, after the answer has been sent.
