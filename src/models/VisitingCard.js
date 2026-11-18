@@ -5,6 +5,15 @@ import { toJSONPlugin, fileUrl } from './plugins.js';
 // Empty string allowed (link not set)
 const socialUrl = /^(https?:\/\/.+)?$/i;
 
+// Personal profile links for the "Follow me" section. Empty = hidden.
+export const PERSONAL_SOCIALS = ['facebook', 'instagram', 'linkedin', 'twitter', 'github', 'youtube', 'threads', 'telegram', 'tiktok', 'pinterest', 'snapchat', 'behance', 'dribbble', 'medium', 'portfolio'];
+const personalSocialsSchema = Object.fromEntries(
+  PERSONAL_SOCIALS.map((key) => [
+    key,
+    { type: String, trim: true, maxlength: 300, match: [socialUrl, `${key} link must start with http:// or https://`], default: '' },
+  ])
+);
+
 // Single document holding the company visiting card shown at /visiting-card on the website.
 // Defaults match the printed card so the page works before anyone edits it.
 const visitingCardSchema = new mongoose.Schema(
@@ -79,6 +88,7 @@ const visitingCardSchema = new mongoose.Schema(
       twitter: { type: String, trim: true, maxlength: 300, match: [socialUrl, 'X (Twitter) link must start with http:// or https://'], default: '' },
       youtube: { type: String, trim: true, maxlength: 300, match: [socialUrl, 'YouTube link must start with http:// or https://'], default: '' },
     },
+    personalSocials: personalSocialsSchema,
     // Profile picture: id of a StoredFile (kept in the database so it survives redeploys).
     // Older records may hold a relative path inside /uploads instead.
     photo: { type: String, default: '' },
