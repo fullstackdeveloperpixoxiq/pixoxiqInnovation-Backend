@@ -10,6 +10,8 @@ const storedFileSchema = new mongoose.Schema(
     size: { type: Number, required: true },
     // What the file is used for, e.g. "visiting-card/profile-photo"
     purpose: { type: String, default: '' },
+    // Original file name, used when the file is downloaded (e.g. a brochure)
+    filename: { type: String, default: '', maxlength: 200 },
   },
   { timestamps: true }
 );

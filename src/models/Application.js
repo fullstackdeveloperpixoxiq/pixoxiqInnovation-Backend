@@ -15,8 +15,14 @@ const applicationSchema = new mongoose.Schema(
     },
     phone: { type: String, required: [true, 'Phone is required'], trim: true, maxlength: 25 },
     linkedin: { type: String, trim: true, maxlength: 300, default: '' },
-    resumeUrl: { type: String, required: [true, 'Resume link is required'], trim: true, maxlength: 500 },
+    // Legacy: older applications shared a link to the resume
+    resumeUrl: { type: String, trim: true, maxlength: 500, default: '' },
+    // Uploaded resume (PDF, DOCX or image) kept in the database; served to admins only
+    resumeFile: { type: mongoose.Schema.Types.ObjectId, ref: 'StoredFile', default: null },
+    resumeName: { type: String, trim: true, maxlength: 200, default: '' },
     position: { type: String, required: [true, 'Position is required'], trim: true, maxlength: 120 },
+    // Website account that submitted it (null for guests / older applications)
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
     vacancy: { type: mongoose.Schema.Types.ObjectId, ref: 'Vacancy', default: null },
     experience: { type: String, trim: true, maxlength: 40, default: '' },
     message: { type: String, trim: true, maxlength: 5000, default: '' },
@@ -27,6 +33,10 @@ const applicationSchema = new mongoose.Schema(
 );
 
 applicationSchema.index({ status: 1, createdAt: -1 });
+
+// Status shown to the applicant on the website: the same hiring stages the admin uses.
+// A brand-new application is shown as "reviewing" (it is waiting in the review queue).
+export const publicStatus = (status) => (status === 'new' ? 'reviewing' : status);
 
 applicationSchema.plugin(toJSONPlugin);
 

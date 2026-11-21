@@ -15,6 +15,11 @@ import applicationRoutes from './applicationRoutes.js';
 import visitingCardRoutes from './visitingCardRoutes.js';
 import chatRoutes from './chatRoutes.js';
 import aiRoutes from './aiRoutes.js';
+import { accountRoutes, adminUserRoutes } from './userRoutes.js';
+import announcementRoutes from './announcementRoutes.js';
+import newsletterRoutes from './newsletterRoutes.js';
+import cookieConsentRoutes from './cookieConsentRoutes.js';
+import aboutRoutes from './aboutRoutes.js';
 
 const router = Router();
 
@@ -22,6 +27,7 @@ const router = Router();
 router.use('/public/chat', chatRoutes);
 router.use('/public', publicRoutes);
 router.use('/auth', authRoutes);
+router.use('/account', accountRoutes);
 
 // Admin (JWT protected)
 router.get('/dashboard/stats', protect, getStats);
@@ -61,5 +67,10 @@ router.use('/messages', protect, messageRoutes);
 router.use('/applications', protect, applicationRoutes);
 router.use('/visiting-card', protect, visitingCardRoutes);
 router.use('/ai', protect, aiRoutes);
+router.use('/users', protect, adminUserRoutes);
+router.use('/announcements', protect, announcementRoutes);
+router.use('/newsletter', protect, newsletterRoutes);
+router.use('/cookie-consents', protect, cookieConsentRoutes);
+router.use('/about', protect, aboutRoutes);
 
 export default router;

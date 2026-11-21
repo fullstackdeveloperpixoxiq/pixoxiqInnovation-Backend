@@ -39,6 +39,20 @@ export const sniffFileType = (buffer) => {
   return null;
 };
 
+export const DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+// Visiting card brochures: PDF, DOCX or JPG/PNG/WEBP image, checked from the file content
+export const sniffDocumentType = (buffer, originalName = '') => {
+  const image = sniffImageType(buffer);
+  if (image) return image;
+  if (!buffer || buffer.length < 5) return null;
+  if (buffer.toString('latin1', 0, 5) === '%PDF-') return 'application/pdf';
+  // DOCX is a ZIP archive containing word/document.xml
+  if (buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04 && /\.docx$/i.test(originalName)
+    && buffer.includes('word/')) return DOCX_TYPE;
+  return null;
+};
+
 // Creates a multer instance that stores files in uploads/<folder>.
 // Fields listed in `databaseFields` are kept in memory (file.buffer) instead, for the
 // controller to save in the database. `databaseTypes` lists the MIME types those fields accept.
@@ -67,7 +81,7 @@ export const createUploader = (folder, { databaseFields = [], databaseTypes = DA
         if (databaseTypes.includes(file.mimetype)) return cb(null, true);
         return cb(ApiError.badRequest(databaseTypes === DATABASE_IMAGE_TYPES
           ? 'Only JPG, PNG or WEBP images are allowed'
-          : 'Only JPG, PNG, WEBP, SVG or PDF files are allowed'));
+          : `Only ${databaseTypes.includes(DOCX_TYPE) ? 'PDF, DOCX, JPG, PNG or WEBP' : 'JPG, PNG, WEBP, SVG or PDF'} files are allowed`));
       }
       if (ALLOWED[file.mimetype]) return cb(null, true);
       cb(ApiError.badRequest('Only JPG, PNG, WEBP, SVG or PDF files are allowed'));

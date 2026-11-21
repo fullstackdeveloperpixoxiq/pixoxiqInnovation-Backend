@@ -31,7 +31,7 @@ const corsOptions = {
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   // X-Chat-Session: anonymous AI assistant session token sent by the public website
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'X-Chat-Session'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'X-Chat-Session', 'X-Chat-Email'],
   maxAge: 86400,
   optionsSuccessStatus: 204,
 };

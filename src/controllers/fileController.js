@@ -18,5 +18,11 @@ export const getFile = asyncHandler(async (req, res) => {
   if (file.contentType === 'image/svg+xml') {
     res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
   }
+  // Uploaded documents (brochures) keep their original name when downloaded
+  if (file.filename) {
+    const name = file.filename.replace(/["\\\r\n]/g, '');
+    const ascii = name.replace(/[^\x20-\x7e]/g, '_');
+    res.set('Content-Disposition', `inline; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`);
+  }
   res.send(file.data);
 });

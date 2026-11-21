@@ -30,6 +30,15 @@ export const requireVisitor = (req, res, next) => {
   next();
 };
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+// Records who is asking (logged-in account and/or the email entered in the chat) for admins
+const identify = (req, conversation) => {
+  if (req.user && !conversation.user) conversation.user = req.user._id;
+  const email = String(req.get('x-chat-email') || req.user?.email || '').trim().toLowerCase().slice(0, 254);
+  if (email && EMAIL_RE.test(email) && !conversation.visitorEmail) conversation.visitorEmail = email;
+};
+
 const toPublicMessage = (m) => ({
   id: String(m._id || m.id),
   role: m.role,
@@ -304,6 +313,7 @@ export const sendMessage = asyncHandler(async (req, res) => {
     });
   }
 
+  identify(req, conversation);
   const history = await loadHistory(conversation._id, { window: settings.historyWindow });
   await ChatMessage.create({ conversation: conversation._id, visitorHash: req.visitorHash, role: 'user', content: text });
   conversation.messageCount += 1;

@@ -163,6 +163,7 @@ export const getOverview = asyncHandler(async (req, res) => {
         messageCount: c.messageCount,
         lastMessageAt: c.lastMessageAt,
         visitorTag: c.visitorTag,
+        visitorEmail: c.visitorEmail,
       })),
       recentErrors,
     },
@@ -236,16 +237,17 @@ export const clearLogs = asyncHandler(async (req, res) => {
 
 export const listConversations = asyncHandler(async (req, res) => {
   const { items, pagination } = await paginate(ChatConversation, req.query, {
-    searchFields: ['title', 'visitorTag'],
+    searchFields: ['title', 'visitorTag', 'visitorEmail'],
     filterFields: ['visitorTag'],
     defaultSort: '-lastMessageAt',
+    populate: { path: 'user', select: 'name email phone' },
   });
   res.json({ success: true, data: items, pagination });
 });
 
 export const getConversation = asyncHandler(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) throw ApiError.notFound('Conversation not found');
-  const conversation = await ChatConversation.findById(req.params.id).select('+userAgent');
+  const conversation = await ChatConversation.findById(req.params.id).select('+userAgent').populate('user', 'name email phone company');
   if (!conversation) throw ApiError.notFound('Conversation not found');
   const messages = await ChatMessage.find({ conversation: conversation._id }).sort({ createdAt: 1, _id: 1 }).limit(1000);
   res.json({ success: true, data: { conversation, messages } });

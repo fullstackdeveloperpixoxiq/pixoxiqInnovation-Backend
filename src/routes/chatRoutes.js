@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { optionalUser } from '../middleware/userAuth.js';
 import { chatLimiter, chatSessionLimiter } from '../middleware/rateLimit.js';
 import {
   requireVisitor,
@@ -18,7 +19,7 @@ const router = Router();
 router.get('/status', getStatus);
 router.post('/session', chatSessionLimiter, createSession);
 
-router.use(requireVisitor);
+router.use(requireVisitor, optionalUser);
 router.get('/usage', getUsage);
 router.get('/conversations', listConversations);
 router.route('/conversations/:id').get(getConversation).delete(deleteConversation);
