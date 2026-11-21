@@ -12,12 +12,13 @@ export const ALLOWED = {
   'image/jpeg': '.jpg',
   'image/png': '.png',
   'image/webp': '.webp',
+  'image/avif': '.avif',
   'image/svg+xml': '.svg',
   'application/pdf': '.pdf',
 };
 
 // Image types accepted for files that are kept in the database (see models/StoredFile.js)
-const DATABASE_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const DATABASE_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
 
 // Detects the real image type from the first bytes of a file, so a renamed file is rejected
 export const sniffImageType = (buffer) => {
@@ -25,10 +26,12 @@ export const sniffImageType = (buffer) => {
   if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'image/jpeg';
   if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
   if (buffer.toString('latin1', 0, 4) === 'RIFF' && buffer.toString('latin1', 8, 12) === 'WEBP') return 'image/webp';
+  const brand = buffer.toString('latin1', 4, 12);
+  if (brand.startsWith('ftypavif') || brand.startsWith('ftypavis')) return 'image/avif';
   return null;
 };
 
-// Detects the real type of any accepted upload (JPG, PNG, WEBP, SVG, PDF) from its content
+// Detects the real type of any accepted upload (JPG, PNG, WEBP, AVIF, SVG, PDF) from its content
 export const sniffFileType = (buffer) => {
   const image = sniffImageType(buffer);
   if (image) return image;
@@ -80,7 +83,7 @@ export const createUploader = (folder, { databaseFields = [], databaseTypes = DA
       if (inDatabase(file)) {
         if (databaseTypes.includes(file.mimetype)) return cb(null, true);
         return cb(ApiError.badRequest(databaseTypes === DATABASE_IMAGE_TYPES
-          ? 'Only JPG, PNG or WEBP images are allowed'
+          ? 'Only JPG, PNG, WEBP or AVIF images are allowed'
           : `Only ${databaseTypes.includes(DOCX_TYPE) ? 'PDF, DOCX, JPG, PNG or WEBP' : 'JPG, PNG, WEBP, SVG or PDF'} files are allowed`));
       }
       if (ALLOWED[file.mimetype]) return cb(null, true);

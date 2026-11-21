@@ -13,7 +13,7 @@ import {
 } from '../controllers/aboutController.js';
 
 // Admin About Us content (mounted behind `protect` in routes/index.js).
-// Images are kept in the database (JPG/PNG/WEBP, max 5 MB, real type checked from the content).
+// Images are kept in the database (JPG/PNG/WEBP/AVIF, max 5 MB, real type checked from the content).
 const upload = createUploader('about', { databaseFields: ['image'] }).single('image');
 
 const router = Router();

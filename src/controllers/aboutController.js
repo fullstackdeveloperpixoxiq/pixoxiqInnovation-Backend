@@ -19,8 +19,19 @@ const FILE_URL_PREFIX = `${env.apiPublicUrl}/api/public/files/`;
 
 const log = (msg, extra) => console.log(`[about] ${msg}`, extra ?? '');
 
-// Plain content object without Mongoose internals
-const plain = (sub) => (sub ? JSON.parse(JSON.stringify(sub.toObject({ transform: false, virtuals: false }))) : defaultAbout());
+// Plain content object without Mongoose internals. Normalize legacy string image fields so
+// existing records work with the responsive image editor and public renderer immediately.
+const plain = (sub) => {
+  if (!sub) return defaultAbout();
+  const content = JSON.parse(JSON.stringify(sub.toObject({ transform: false, virtuals: false })));
+  const normalize = (image) => typeof image === 'string' ? { src: image, mobileSrc: '', position: 'center' } : image;
+  content.hero.image = normalize(content.hero?.image);
+  content.intro.image = normalize(content.intro?.image);
+  content.visionMission.vision.image = normalize(content.visionMission?.vision?.image);
+  content.visionMission.mission.image = normalize(content.visionMission?.mission?.image);
+  content.capabilities.items = (content.capabilities?.items || []).map((item) => ({ ...item, image: normalize(item.image) }));
+  return content;
+};
 
 const adminView = async (doc) => {
   await doc.populate([
@@ -142,7 +153,7 @@ export const uploadImage = asyncHandler(async (req, res) => {
   const file = req.file;
   if (!file) throw ApiError.badRequest('Choose an image to upload');
   const type = sniffImageType(file.buffer);
-  if (!type) throw ApiError.badRequest('Image must be a valid JPG, PNG or WEBP file');
+  if (!type) throw ApiError.badRequest('Image must be a valid JPG, PNG, WEBP or AVIF file');
   try {
     const stored = await StoredFile.create({
       data: file.buffer,

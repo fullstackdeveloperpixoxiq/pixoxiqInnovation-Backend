@@ -10,7 +10,8 @@ const str = (max) => ({ type: String, trim: true, maxlength: max, default: '' })
 const opts = { _id: false };
 
 const ctaSchema = new Schema({ label: str(80), url: str(500) }, opts);
-const panelSchema = new Schema({ heading: str(80), quote: str(300), description: str(1200), image: str(500) }, opts);
+const imageSchema = new Schema({ src: str(500), mobileSrc: str(500), position: { type: String, enum: ['center', 'top', 'bottom', 'left', 'right'], default: 'center' } }, opts);
+const panelSchema = new Schema({ heading: str(80), quote: str(300), description: str(1200), image: { type: imageSchema, default: () => ({}) } }, opts);
 
 const contentSchema = new Schema(
   {
@@ -28,7 +29,7 @@ const contentSchema = new Schema(
       headline: str(160),
       highlight: str(160),
       intro: str(1200),
-      image: str(500),
+      image: { type: imageSchema, default: () => ({}) },
       primaryCta: { type: ctaSchema, default: () => ({}) },
       secondaryCta: { type: ctaSchema, default: () => ({}) },
     },
@@ -40,7 +41,7 @@ const contentSchema = new Schema(
       manufacturing: str(1200),
       oem: str(1200),
       makeInIndia: str(1200),
-      image: str(500),
+      image: { type: imageSchema, default: () => ({}) },
       stats: [new Schema({ id: str(40), value: str(40), label: str(80) }, opts)],
       highlights: [str(80)],
     },
@@ -51,7 +52,7 @@ const contentSchema = new Schema(
       description: str(1200),
       items: [
         new Schema(
-          { id: str(40), title: str(120), description: str(1200), icon: str(40), image: str(500) },
+          { id: str(40), title: str(120), description: str(1200), icon: str(40), image: { type: imageSchema, default: () => ({}) } },
           opts
         ),
       ],

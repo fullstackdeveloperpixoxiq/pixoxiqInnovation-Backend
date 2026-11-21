@@ -189,6 +189,13 @@ export const cleanImage = (value, field) => {
   throw ApiError.badRequest(`${field}: image must be an uploaded file or an http(s) URL`);
 };
 
+export const cleanImageSettings = (value, field) => {
+  const src = typeof value === 'string' ? value : obj(value).src;
+  const input = typeof value === 'object' ? obj(value) : {};
+  const position = ['center', 'top', 'bottom', 'left', 'right'].includes(input.position) ? input.position : 'center';
+  return { src: cleanImage(src, field), mobileSrc: cleanImage(input.mobileSrc, `${field} mobile`), position };
+};
+
 const cleanIcon = (value, fallback = 'Award') => (ICON_NAMES.includes(value) ? value : fallback);
 const cleanId = (value) => (typeof value === 'string' && /^[\w-]{1,40}$/.test(value) ? value : newItemId());
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
@@ -217,7 +224,7 @@ export const sanitizeCapability = (v, i = 0) => {
     title: cleanText(o.title, LIMITS.title),
     description: cleanText(o.description),
     icon: cleanIcon(o.icon, 'Cpu'),
-    image: cleanImage(o.image, `Capability ${i + 1} image`),
+    image: cleanImageSettings(o.image, `Capability ${i + 1} image`),
   };
   if (!item.title) throw ApiError.badRequest(`Capability ${i + 1}: title is required`);
   return item;
@@ -271,7 +278,7 @@ export const sanitizeAbout = (input, base = defaultAbout()) => {
       heading: cleanText(o.heading, LIMITS.short),
       quote: cleanText(o.quote, 300),
       description: cleanText(o.description),
-      image: cleanImage(o.image, `${label} image`),
+      image: cleanImageSettings(o.image, `${label} image`),
     };
   };
 
@@ -289,7 +296,7 @@ export const sanitizeAbout = (input, base = defaultAbout()) => {
       headline: cleanText(hero.headline, LIMITS.heading),
       highlight: cleanText(hero.highlight, LIMITS.heading),
       intro: cleanText(hero.intro),
-      image: cleanImage(hero.image, 'Hero image'),
+      image: cleanImageSettings(hero.image, 'Hero image'),
       primaryCta: cta(hero.primaryCta, 'Hero primary button'),
       secondaryCta: cta(hero.secondaryCta, 'Hero secondary button'),
     },
@@ -299,7 +306,7 @@ export const sanitizeAbout = (input, base = defaultAbout()) => {
       manufacturing: cleanText(intro.manufacturing),
       oem: cleanText(intro.oem),
       makeInIndia: cleanText(intro.makeInIndia),
-      image: cleanImage(intro.image, 'Company introduction image'),
+      image: cleanImageSettings(intro.image, 'Company introduction image'),
       stats: arr(intro.stats, MAX_ITEMS.stats, 'Statistics')
         .map((s) => ({ id: cleanId(obj(s).id), value: cleanText(obj(s).value, 40), label: cleanText(obj(s).label, LIMITS.short) }))
         .filter((s) => s.value || s.label)
@@ -341,10 +348,14 @@ export const sanitizeAbout = (input, base = defaultAbout()) => {
 export const collectImages = (c) => {
   if (!c) return [];
   return [
-    c.hero?.image,
-    c.intro?.image,
-    c.visionMission?.vision?.image,
-    c.visionMission?.mission?.image,
-    ...(c.capabilities?.items || []).map((i) => i.image),
+    c.hero?.image?.src ?? c.hero?.image,
+    c.hero?.image?.mobileSrc,
+    c.intro?.image?.src ?? c.intro?.image,
+    c.intro?.image?.mobileSrc,
+    c.visionMission?.vision?.image?.src ?? c.visionMission?.vision?.image,
+    c.visionMission?.vision?.image?.mobileSrc,
+    c.visionMission?.mission?.image?.src ?? c.visionMission?.mission?.image,
+    c.visionMission?.mission?.image?.mobileSrc,
+    ...(c.capabilities?.items || []).flatMap((i) => [i.image?.src ?? i.image, i.image?.mobileSrc]),
   ].filter(Boolean);
 };
