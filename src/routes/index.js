@@ -7,6 +7,7 @@ import certificateImageController from '../controllers/certificateImageControlle
 import employeeController from '../controllers/employeeController.js';
 import serviceController from '../controllers/serviceController.js';
 import { getStats } from '../controllers/dashboardController.js';
+import { getOdooStatus, syncOdooNow } from '../controllers/odooController.js';
 import resourceRouter from './resourceRouter.js';
 import authRoutes from './authRoutes.js';
 import publicRoutes from './publicRoutes.js';
@@ -25,6 +26,8 @@ router.use('/auth', authRoutes);
 
 // Admin (JWT protected)
 router.get('/dashboard/stats', protect, getStats);
+router.get('/odoo/status', protect, getOdooStatus);
+router.post('/odoo/sync', protect, authorize('superadmin'), syncOdooNow);
 router.use('/vacancies', protect, resourceRouter(vacancyController));
 router.use('/services', protect, resourceRouter(serviceController));
 router.use(

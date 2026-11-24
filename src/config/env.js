@@ -41,6 +41,24 @@ const env = {
     // Max upload size for knowledge base documents (MB)
     maxDocumentMb: Number(process.env.KNOWLEDGE_MAX_FILE_MB) || 10,
   },
+  // Odoo integration (vacancies, contact leads, job applicants). Off until URL, DB and key are set.
+  odoo: {
+    // Only the origin is used, so a pasted browser address like https://x.odoo.com/odoo/... still works
+    url: (() => {
+      const raw = (process.env.ODOO_URL || '').trim();
+      if (!raw) return '';
+      try {
+        return new URL(raw).origin;
+      } catch {
+        return raw.replace(/\/+$/, '');
+      }
+    })(),
+    db: (process.env.ODOO_DB || '').trim(),
+    apiKey: (process.env.ODOO_API_KEY || '').trim(),
+    // Only needed for Odoo versions older than 19 (no JSON-2 API): the API user's login email
+    username: (process.env.ODOO_USERNAME || '').trim(),
+    syncMinutes: Math.max(Number(process.env.ODOO_SYNC_MINUTES) || 10, 1),
+  },
   seedAdmin: {
     name: process.env.SEED_ADMIN_NAME || 'Pixoxiq Admin',
     email: process.env.SEED_ADMIN_EMAIL || 'admin@pixoxiq.com',

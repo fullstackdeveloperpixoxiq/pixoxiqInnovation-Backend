@@ -22,6 +22,11 @@ const applicationSchema = new mongoose.Schema(
     message: { type: String, trim: true, maxlength: 5000, default: '' },
     status: { type: String, enum: APPLICATION_STATUSES, default: 'new' },
     notes: { type: String, trim: true, maxlength: 2000, default: '' },
+    // Odoo sync: id of the record created in Odoo, null until pushed
+    odooId: { type: Number, default: null, index: true },
+    odooSyncedAt: Date,
+    odooAttempts: { type: Number, default: 0 },
+    odooError: { type: String, default: '' },
   },
   { timestamps: true }
 );

@@ -5,6 +5,7 @@ import ApiError from '../utils/ApiError.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import { buildListQuery } from '../utils/queryBuilder.js';
 import { pickFields } from './crudFactory.js';
+import { queueApplication } from '../services/odooSync.js';
 
 // ---------- Public ----------
 
@@ -29,6 +30,7 @@ export const submitApplication = asyncHandler(async (req, res) => {
   if (!vacancy && data.position) vacancy = await Vacancy.findOne({ title: data.position });
 
   const application = await Application.create({ ...data, vacancy: vacancy?._id || null });
+  queueApplication(application); // also create an applicant in Odoo Recruitment (in the background)
   res.status(201).json({ success: true, message: 'Application received', data: { id: application.id } });
 });
 

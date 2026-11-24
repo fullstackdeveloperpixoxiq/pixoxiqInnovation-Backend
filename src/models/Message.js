@@ -25,6 +25,11 @@ const messageSchema = new mongoose.Schema(
     status: { type: String, enum: MESSAGE_STATUSES, default: 'new' },
     notes: { type: String, trim: true, maxlength: 2000, default: '' },
     readAt: Date,
+    // Odoo sync: id of the record created in Odoo, null until pushed
+    odooId: { type: Number, default: null, index: true },
+    odooSyncedAt: Date,
+    odooAttempts: { type: Number, default: 0 },
+    odooError: { type: String, default: '' },
     ip: { type: String, select: false },
     userAgent: { type: String, select: false },
   },

@@ -2,10 +2,12 @@ import env from './src/config/env.js';
 import connectDB from './src/config/db.js';
 import app from './src/app.js';
 import { startAiBackgroundJobs } from './src/ai/maintenance.js';
+import { startOdooSync } from './src/services/odooSync.js';
 
 const start = async () => {
   await connectDB();
   startAiBackgroundJobs();
+  startOdooSync();
 
   const server = app.listen(env.port, () => {
     console.log(`🚀 API running on http://localhost:${env.port} (${env.nodeEnv})`);

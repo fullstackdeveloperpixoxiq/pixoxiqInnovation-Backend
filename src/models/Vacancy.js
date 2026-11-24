@@ -20,6 +20,10 @@ const vacancySchema = new mongoose.Schema(
     },
     deadline: Date,
     isActive: { type: Boolean, default: true },
+    // 'odoo' = copied from Odoo Recruitment and updated by the sync; 'admin' = created here
+    source: { type: String, enum: ['admin', 'odoo'], default: 'admin' },
+    odooId: { type: Number, default: null, index: true },
+    odooSyncedAt: Date,
     order: { type: Number, default: 0 },
   },
   { timestamps: true }

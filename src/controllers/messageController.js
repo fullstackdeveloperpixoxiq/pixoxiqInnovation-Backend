@@ -3,6 +3,7 @@ import ApiError from '../utils/ApiError.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import { paginate } from '../utils/queryBuilder.js';
 import { pickFields } from './crudFactory.js';
+import { queueMessage } from '../services/odooSync.js';
 
 // ---------- Public ----------
 
@@ -16,6 +17,7 @@ export const submitMessage = asyncHandler(async (req, res) => {
     ip: req.ip,
     userAgent: req.get('user-agent')?.slice(0, 300),
   });
+  queueMessage(message); // also create a lead in Odoo CRM (in the background)
   res.status(201).json({ success: true, message: 'Message received', data: { id: message.id } });
 });
 
