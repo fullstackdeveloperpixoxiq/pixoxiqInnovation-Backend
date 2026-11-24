@@ -3,6 +3,7 @@ import connectDB from './src/config/db.js';
 import app from './src/app.js';
 import { startAiBackgroundJobs } from './src/ai/maintenance.js';
 import { startOdooSync } from './src/services/odooSync.js';
+import { emailStatus } from './src/services/emailService.js';
 
 const start = async () => {
   await connectDB();
@@ -11,6 +12,12 @@ const start = async () => {
 
   const server = app.listen(env.port, () => {
     console.log(`🚀 API running on http://localhost:${env.port} (${env.nodeEnv})`);
+    const mail = emailStatus();
+    console.log(
+      mail.configured
+        ? `📧 Email: ${mail.provider} from ${mail.fromEmail}`
+        : '⚠️  Email NOT configured (set EMAIL_PROVIDER, BREVO_API_KEY, EMAIL_FROM): registration OTPs cannot be sent'
+    );
   });
 
   const shutdown = (signal) => {

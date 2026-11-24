@@ -31,7 +31,7 @@ const corsOptions = {
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   // X-Chat-Session: anonymous AI assistant session token sent by the public website
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'X-Chat-Session'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'X-Chat-Session', 'X-Chat-Email'],
   maxAge: 86400,
   optionsSuccessStatus: 204,
 };
@@ -46,6 +46,16 @@ app.use(express.urlencoded({ extended: true }));
 if (!env.isProd) app.use(morgan('dev'));
 
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads'), { maxAge: '7d' }));
+
+// Uptime monitor endpoint (UptimeRobot): public, no auth, no DB access.
+// Express answers HEAD requests with this GET handler too.
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    message: 'Backend is running',
+    timestamp: new Date().toISOString(),
+  });
+});
 
 app.get('/api/health', (req, res) => {
   res.json({ success: true, status: 'ok', time: new Date().toISOString() });

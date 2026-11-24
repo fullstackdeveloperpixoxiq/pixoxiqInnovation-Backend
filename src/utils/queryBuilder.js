@@ -33,8 +33,10 @@ export const buildListQuery = (query, { searchFields = [], filterFields = [], de
 
 export const paginate = async (Model, query, options) => {
   const { filter, page, limit, skip, sort } = buildListQuery(query, options);
+  let find = Model.find(filter).sort(sort).skip(skip).limit(limit);
+  if (options?.populate) find = find.populate(options.populate);
   const [items, total] = await Promise.all([
-    Model.find(filter).sort(sort).skip(skip).limit(limit),
+    find,
     Model.countDocuments(filter),
   ]);
   return {

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { trackChanges } from '../utils/changeTracker.js';
 import env from '../config/env.js';
 import { toJSONPlugin, fileUrl } from './plugins.js';
 
@@ -56,16 +57,19 @@ const visitingCardSchema = new mongoose.Schema(
       match: [/^(https?:\/\/.+)?$/i, 'QR link must start with http:// or https://'],
       default: '',
     },
-    // Links shown in the "Documents" tab (brochure, company profile...)
+    // Files shown in the "Brochure" tab (brochure, company profile...). `file` is the StoredFile id,
+    // `url` the public address of that file (older entries may hold an external link only).
     documents: {
       type: [
         {
           _id: false,
           title: { type: String, trim: true, required: [true, 'Document title is required'], maxlength: 120 },
+          file: { type: String, default: '' },
+          filename: { type: String, trim: true, maxlength: 200, default: '' },
           url: {
             type: String,
             trim: true,
-            required: [true, 'Document link is required'],
+            required: [true, 'Document file is required'],
             maxlength: 1000,
             match: [/^https?:\/\//i, 'Document link must start with http:// or https://'],
           },
@@ -112,5 +116,7 @@ visitingCardSchema.statics.getSingleton = async function getSingleton() {
 };
 
 visitingCardSchema.plugin(toJSONPlugin);
+// The AI assistant reads this content live: any change refreshes its company data
+trackChanges(visitingCardSchema);
 
 export default mongoose.model('VisitingCard', visitingCardSchema);

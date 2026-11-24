@@ -1,6 +1,6 @@
-# PIXOXIQ AI Assistant
+# Pixpi AI
 
-The PIXOXIQ AI Assistant is the company's virtual assistant on the public website. It answers questions about PIXOXIQ using **only** the verified information in its knowledge base (retrieval-augmented generation). It is separate from the Carmana ERP and Ostik chatbots.
+The Pixpi AI is the company's virtual assistant on the public website. It answers questions about PIXOXIQ using **only** the verified information in its knowledge base (retrieval-augmented generation). It is separate from the Carmana ERP and Ostik chatbots.
 
 It spans three repositories:
 
@@ -49,6 +49,14 @@ Admin panel (Render)           │        └─ configService.getChatClient ─
 **Sync rules:** editing an entry deletes its old chunks immediately, so outdated facts are never served while it re-indexes. Deleting an entry deletes its chunks. Deactivating hides it from retrieval. Changing the embedding model re-indexes everything automatically.
 
 The vector index is kept in memory and rebuilt on change. This suits a company knowledge base (up to tens of thousands of chunks on one instance). For a much larger corpus or several backend instances, replace the body of `searchKnowledge()` with MongoDB Atlas Vector Search; callers do not change.
+
+### Live company data (`src/ai/companyData.js`)
+Structured website content is **not** taken from vector search. For every question the assistant reads the published records straight from the existing collections (`services`, `visitingcards`, plus `certificates` / `vacancies` when the question is about them) and puts them first in the model context:
+* the complete list of published services (title, description, features, page link), so "what services do you offer?" always lists all of them;
+* full details (`content`) of up to 3 services the question names;
+* contact details and the company "about" text from the visiting card.
+
+Only `isActive: true` records are used. Mongoose hooks on these models (`utils/changeTracker.js`) refresh the cache on any create/update/delete/publish toggle/reorder, with a 60-second safety expiry, so admin changes apply to the next question with no manual sync. Knowledge entries created by the older **Sync website content** button (`sourceType: website`) are skipped in search, so they can never duplicate or contradict the live data. The knowledge base remains the place for information that has no website module (company profile documents, projects, technologies, FAQs).
 
 ### Conversation context
 * Only the last **N messages** are sent (Chatbot Settings → History window, default 10).

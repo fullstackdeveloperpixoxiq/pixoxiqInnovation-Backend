@@ -15,7 +15,7 @@ import {
 } from '../ai/chatService.js';
 import { logAi } from '../ai/logger.js';
 
-// Public endpoints of the PIXOXIQ AI Assistant used by the website.
+// Public endpoints of the Pixpi AI used by the website.
 // Visitors are anonymous: POST /session issues a random token which the browser sends in
 // the X-Chat-Session header. Only its SHA-256 hash is stored, and every conversation
 // query is scoped to that hash, so visitors can only ever access their own conversations.
@@ -28,6 +28,15 @@ export const requireVisitor = (req, res, next) => {
   if (!token || !TOKEN_RE.test(token)) return next(ApiError.unauthorized('Chat session missing or invalid'));
   req.visitorHash = sha256(token);
   next();
+};
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+// Records who is asking (logged-in account and/or the email entered in the chat) for admins
+const identify = (req, conversation) => {
+  if (req.user && !conversation.user) conversation.user = req.user._id;
+  const email = String(req.get('x-chat-email') || req.user?.email || '').trim().toLowerCase().slice(0, 254);
+  if (email && EMAIL_RE.test(email) && !conversation.visitorEmail) conversation.visitorEmail = email;
 };
 
 const toPublicMessage = (m) => ({
@@ -71,13 +80,21 @@ const ensureAvailable = async () => {
   return settings;
 };
 
-const enforceDailyLimit = async (visitorHash, settings) => {
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+const USAGE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+// Messages counted against the daily cap: user messages + regenerations in the rolling 24h window.
+// Single source of truth for both enforcement and the usage endpoint.
+const countDailyUsage = async (visitorHash) => {
+  const since = new Date(Date.now() - USAGE_WINDOW_MS);
   const [sent, regenerated] = await Promise.all([
     ChatMessage.countDocuments({ visitorHash, role: 'user', createdAt: { $gte: since } }),
     ChatMessage.countDocuments({ visitorHash, role: 'assistant', regenerated: true, createdAt: { $gte: since } }),
   ]);
-  if (sent + regenerated >= settings.dailyMessageLimit) {
+  return sent + regenerated;
+};
+
+const enforceDailyLimit = async (visitorHash, settings) => {
+  if ((await countDailyUsage(visitorHash)) >= settings.dailyMessageLimit) {
     throw new ApiError(429, 'You have reached the daily message limit. Please try again tomorrow or contact us directly.');
   }
 };
@@ -242,6 +259,16 @@ export const getStatus = asyncHandler(async (req, res) => {
   });
 });
 
+export const getUsage = asyncHandler(async (req, res) => {
+  const [settings, used] = await Promise.all([getChatSettings(), countDailyUsage(req.visitorHash)]);
+  const limit = settings.dailyMessageLimit;
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    success: true,
+    data: { used, limit, remaining: Math.max(0, limit - used), windowHours: USAGE_WINDOW_MS / 3600000 },
+  });
+});
+
 export const createSession = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, data: { token: crypto.randomBytes(32).toString('base64url') } });
 });
@@ -286,6 +313,7 @@ export const sendMessage = asyncHandler(async (req, res) => {
     });
   }
 
+  identify(req, conversation);
   const history = await loadHistory(conversation._id, { window: settings.historyWindow });
   await ChatMessage.create({ conversation: conversation._id, visitorHash: req.visitorHash, role: 'user', content: text });
   conversation.messageCount += 1;

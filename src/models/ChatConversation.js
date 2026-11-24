@@ -9,6 +9,9 @@ const chatConversationSchema = new mongoose.Schema(
     visitorHash: { type: String, required: true, index: true, select: false },
     // Short, non-reversible id shown to admins to group conversations of one visitor
     visitorTag: { type: String, default: '' },
+    // Who asked: the logged-in website account (if any) and the email typed into the chat
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+    visitorEmail: { type: String, trim: true, lowercase: true, maxlength: 254, default: '' },
     title: { type: String, trim: true, maxlength: 120, default: 'New conversation' },
     messageCount: { type: Number, default: 0 },
     lastMessageAt: { type: Date, default: Date.now, index: true },

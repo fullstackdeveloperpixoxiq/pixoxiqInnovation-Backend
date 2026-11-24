@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { trackChanges } from '../utils/changeTracker.js';
 import { toJSONPlugin } from './plugins.js';
 
 export const JOB_TYPES = ['Full-time', 'Part-time', 'Contract', 'Internship'];
@@ -37,5 +38,7 @@ vacancySchema.pre('validate', function cleanRequirements(next) {
 });
 
 vacancySchema.plugin(toJSONPlugin);
+// The AI assistant reads this content live: any change refreshes its company data
+trackChanges(vacancySchema);
 
 export default mongoose.model('Vacancy', vacancySchema);

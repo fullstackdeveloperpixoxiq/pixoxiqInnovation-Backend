@@ -3,6 +3,7 @@ import ChatMessage from '../models/ChatMessage.js';
 import ChatSettings from '../models/ChatSettings.js';
 import { getChatClient, getEmbeddingClient } from './configService.js';
 import { searchKnowledge } from './retrieval.js';
+import { getCompanyContexts } from './companyData.js';
 import { buildSystemPrompt, SUMMARY_SYSTEM_PROMPT } from './prompt.js';
 import { cleanText } from './textExtract.js';
 import { logAi } from './logger.js';
@@ -60,13 +61,20 @@ export const generateReply = async ({ history = [], message, summary = '', signa
   const chatClient = await getChatClient();
   const embeddingClient = await getEmbeddingClient();
 
+  const query = retrievalQuery(history, message);
+  // Live website data (services, contact, certifications, vacancies) read straight from the
+  // database. Knowledge entries imported from the website are skipped in the search below:
+  // the live data replaces them, so nothing is duplicated or stale.
+  const company = await getCompanyContexts(query);
+
   let retrieval;
   try {
-    retrieval = await searchKnowledge(retrievalQuery(history, message), {
+    retrieval = await searchKnowledge(query, {
       topK: settings.retrievalTopK,
       minRelevance: settings.minRelevance,
       embeddingClient,
       signal,
+      excludeSourceTypes: ['website'],
     });
   } catch (err) {
     err.stage = 'retrieval';
@@ -76,13 +84,13 @@ export const generateReply = async ({ history = [], message, summary = '', signa
 
   // One numbered source per knowledge entry (its chunks grouped), so the [n] citations in the
   // answer match the n-th item of `sources` shown to the visitor
-  const grouped = [];
+  const grouped = company.map((c) => ({ entryId: null, title: c.title, category: c.category, score: 1, texts: [c.text] }));
   retrieval.results.forEach((r) => {
-    const existing = grouped.find((g) => g.entryId === r.entryId);
+    const existing = grouped.find((g) => g.entryId && g.entryId === r.entryId);
     if (existing) existing.texts.push(r.text);
     else grouped.push({ entryId: r.entryId, title: r.title, category: r.category, score: r.score, texts: [r.text] });
   });
-  const sources = grouped.map((g) => ({ entry: g.entryId, title: g.title, category: g.category, score: g.score }));
+  const sources = grouped.map((g) => ({ entry: g.entryId || undefined, title: g.title, category: g.category, score: g.score }));
   onSources?.(sources);
 
   const system = buildSystemPrompt({

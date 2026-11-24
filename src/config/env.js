@@ -59,6 +59,18 @@ const env = {
     username: (process.env.ODOO_USERNAME || '').trim(),
     syncMinutes: Math.max(Number(process.env.ODOO_SYNC_MINUTES) || 10, 1),
   },
+  // Public website URL, used in newsletter verification / unsubscribe links
+  siteUrl: (process.env.SITE_URL || 'https://www.pixoxiq.com').replace(/\/+$/, ''),
+  // Newsletter email delivery. EMAIL_PROVIDER: "resend" or "brevo" (auto-detected from the key
+  // that is set when omitted). Without a provider, subscriptions are confirmed immediately
+  // (no verification email) and newsletters cannot be sent.
+  email: {
+    provider: (process.env.EMAIL_PROVIDER || (process.env.RESEND_API_KEY ? 'resend' : process.env.BREVO_API_KEY ? 'brevo' : '')).toLowerCase(),
+    resendApiKey: process.env.RESEND_API_KEY || '',
+    brevoApiKey: process.env.BREVO_API_KEY || '',
+    fromEmail: process.env.EMAIL_FROM || process.env.BREVO_SENDER_EMAIL || '',
+    fromName: process.env.EMAIL_FROM_NAME || process.env.BREVO_SENDER_NAME || 'PIXOXIQ Innovations',
+  },
   seedAdmin: {
     name: process.env.SEED_ADMIN_NAME || 'Pixoxiq Admin',
     email: process.env.SEED_ADMIN_EMAIL || 'admin@pixoxiq.com',

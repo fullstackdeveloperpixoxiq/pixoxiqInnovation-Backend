@@ -12,12 +12,13 @@ export const ALLOWED = {
   'image/jpeg': '.jpg',
   'image/png': '.png',
   'image/webp': '.webp',
+  'image/avif': '.avif',
   'image/svg+xml': '.svg',
   'application/pdf': '.pdf',
 };
 
 // Image types accepted for files that are kept in the database (see models/StoredFile.js)
-const DATABASE_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const DATABASE_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
 
 // Detects the real image type from the first bytes of a file, so a renamed file is rejected
 export const sniffImageType = (buffer) => {
@@ -25,10 +26,12 @@ export const sniffImageType = (buffer) => {
   if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'image/jpeg';
   if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
   if (buffer.toString('latin1', 0, 4) === 'RIFF' && buffer.toString('latin1', 8, 12) === 'WEBP') return 'image/webp';
+  const brand = buffer.toString('latin1', 4, 12);
+  if (brand.startsWith('ftypavif') || brand.startsWith('ftypavis')) return 'image/avif';
   return null;
 };
 
-// Detects the real type of any accepted upload (JPG, PNG, WEBP, SVG, PDF) from its content
+// Detects the real type of any accepted upload (JPG, PNG, WEBP, AVIF, SVG, PDF) from its content
 export const sniffFileType = (buffer) => {
   const image = sniffImageType(buffer);
   if (image) return image;
@@ -36,6 +39,20 @@ export const sniffFileType = (buffer) => {
   if (buffer.toString('latin1', 0, 5) === '%PDF-') return 'application/pdf';
   const head = buffer.toString('utf8', 0, Math.min(buffer.length, 2048)).replace(/^﻿/, '');
   if (/^\s*(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*(<!DOCTYPE svg[^>]*>\s*)?<svg[\s>]/i.test(head)) return 'image/svg+xml';
+  return null;
+};
+
+export const DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+// Visiting card brochures: PDF, DOCX or JPG/PNG/WEBP image, checked from the file content
+export const sniffDocumentType = (buffer, originalName = '') => {
+  const image = sniffImageType(buffer);
+  if (image) return image;
+  if (!buffer || buffer.length < 5) return null;
+  if (buffer.toString('latin1', 0, 5) === '%PDF-') return 'application/pdf';
+  // DOCX is a ZIP archive containing word/document.xml
+  if (buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04 && /\.docx$/i.test(originalName)
+    && buffer.includes('word/')) return DOCX_TYPE;
   return null;
 };
 
@@ -66,8 +83,8 @@ export const createUploader = (folder, { databaseFields = [], databaseTypes = DA
       if (inDatabase(file)) {
         if (databaseTypes.includes(file.mimetype)) return cb(null, true);
         return cb(ApiError.badRequest(databaseTypes === DATABASE_IMAGE_TYPES
-          ? 'Only JPG, PNG or WEBP images are allowed'
-          : 'Only JPG, PNG, WEBP, SVG or PDF files are allowed'));
+          ? 'Only JPG, PNG, WEBP or AVIF images are allowed'
+          : `Only ${databaseTypes.includes(DOCX_TYPE) ? 'PDF, DOCX, JPG, PNG or WEBP' : 'JPG, PNG, WEBP, SVG or PDF'} files are allowed`));
       }
       if (ALLOWED[file.mimetype]) return cb(null, true);
       cb(ApiError.badRequest('Only JPG, PNG, WEBP, SVG or PDF files are allowed'));

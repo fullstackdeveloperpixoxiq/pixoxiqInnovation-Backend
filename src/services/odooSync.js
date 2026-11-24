@@ -1,6 +1,7 @@
 import Vacancy from '../models/Vacancy.js';
 import Message from '../models/Message.js';
 import Application from '../models/Application.js';
+import StoredFile from '../models/StoredFile.js';
 import env from '../config/env.js';
 import { isOdooEnabled, odooCall, odooFields } from './odoo.js';
 
@@ -96,7 +97,8 @@ export const pushApplication = async (application) => {
   const notes = [
     `Position: ${application.position}`,
     application.experience && `Experience: ${application.experience}`,
-    `Resume: ${application.resumeUrl}`,
+    application.resumeUrl && `Resume: ${application.resumeUrl}`,
+    application.resumeFile && `Resume: attached (${application.resumeName || 'file'})`,
     application.linkedin && `LinkedIn: ${application.linkedin}`,
     application.message && `\n${application.message}`,
   ]
@@ -120,6 +122,24 @@ export const pushApplication = async (application) => {
   }
 
   const [id] = await odooCall('hr.applicant', 'create', { vals_list: [vals] });
+
+  // Uploaded CV goes to the applicant as an attachment
+  if (application.resumeFile) {
+    const file = await StoredFile.findById(application.resumeFile);
+    if (file?.data) {
+      await odooCall('ir.attachment', 'create', {
+        vals_list: [
+          {
+            name: application.resumeName || file.filename || 'resume',
+            datas: Buffer.from(file.data).toString('base64'),
+            mimetype: file.contentType,
+            res_model: 'hr.applicant',
+            res_id: id,
+          },
+        ],
+      });
+    }
+  }
   return id;
 };
 

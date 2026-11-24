@@ -18,6 +18,15 @@ export const formLimiter = rateLimit({
   message: { success: false, message: 'Too many submissions, please try again later' },
 });
 
+// Registration OTP verify / resend (per IP). Per-OTP attempt cap is enforced in the controller too.
+export const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many verification attempts, try again in 15 minutes' },
+});
+
 // AI assistant: messages sent to the model (per IP). A per-visitor daily cap is applied too.
 export const chatLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -43,4 +52,22 @@ export const aiAdminLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { success: false, message: 'Too many AI requests, please wait a minute' },
+});
+
+// Newsletter subscribe / verify / unsubscribe (per IP)
+export const newsletterLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests, please try again in a few minutes' },
+});
+
+// Cookie consent banner save / withdraw (per IP)
+export const cookieConsentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests, please try again in a few minutes' },
 });
