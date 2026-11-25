@@ -34,6 +34,8 @@ const applicationSchema = new mongoose.Schema(
     odooAttempts: { type: Number, default: 0 },
     odooError: { type: String, default: '' },
     // Status both sides last agreed on (see services/odooStatus.js)
+    // true once the Odoo applicant is linked to a job position
+    odooJobLinked: { type: Boolean, default: false },
     odooStatus: { type: String, enum: [...APPLICATION_STATUSES, null], default: null },
   },
   { timestamps: true }

@@ -91,6 +91,32 @@ export const pushMessage = async (message) => {
 
 // ---------- Job applications (website -> Recruitment applicant) ----------
 
+// Odoo job position for an application. Vacancies created in the admin panel have no Odoo job
+// yet: find one with the same name, or create it (unpublished, so Odoo's own website is unchanged).
+const ensureOdooJob = async (vacancy, position) => {
+  if (vacancy?.odooId) return vacancy.odooId;
+  const name = String(vacancy?.title || position || '').trim();
+  if (!name) return null;
+
+  const [existing] = await odooCall('hr.job', 'search_read', {
+    domain: [['name', '=ilike', name]],
+    fields: ['id'],
+    limit: 1,
+    context: { active_test: false },
+  });
+  let jobId = existing?.id;
+  if (!jobId) {
+    const fields = await odooFields('hr.job');
+    const vals = { name };
+    if (fields.has('is_published')) vals.is_published = false;
+    [jobId] = await odooCall('hr.job', 'create', { vals_list: [vals] });
+    log(`created job "${name}" in Odoo (#${jobId})`);
+  }
+  // Remember it on the admin vacancy (source stays "admin", so the vacancy sync leaves it alone)
+  if (vacancy?._id) await Vacancy.updateOne({ _id: vacancy._id }, { $set: { odooId: jobId } });
+  return jobId;
+};
+
 export const pushApplication = async (application) => {
   const vacancy = application.vacancy?.odooId !== undefined ? application.vacancy : application.vacancy && (await Vacancy.findById(application.vacancy));
   const fields = await odooFields('hr.applicant');
@@ -108,7 +134,8 @@ export const pushApplication = async (application) => {
 
   const person = { partner_name: application.name, email_from: application.email, partner_phone: application.phone };
   const vals = {};
-  if (vacancy?.odooId) vals.job_id = vacancy.odooId;
+  const jobId = await ensureOdooJob(vacancy, application.position);
+  if (jobId) vals.job_id = jobId;
   if (fields.has('name')) vals.name = `${application.position} – ${application.name}`; // required on Odoo 17
   if (fields.has('linkedin_profile') && application.linkedin) vals.linkedin_profile = application.linkedin;
   if (fields.has('applicant_notes')) vals.applicant_notes = notes;
@@ -123,6 +150,7 @@ export const pushApplication = async (application) => {
   }
 
   const [id] = await odooCall('hr.applicant', 'create', { vals_list: [vals] });
+  if (jobId) application.odooJobLinked = true;
 
   // Uploaded CV goes to the applicant as an attachment
   if (application.resumeFile) {
@@ -183,9 +211,29 @@ export const retryPending = async () => {
   return { messages: messages.length, applications: applications.length };
 };
 
+// Applicants sent before admin-panel jobs existed in Odoo: link them to their job now
+export const linkMissingJobs = async () => {
+  const apps = await Application.find({ odooId: { $ne: null }, odooJobLinked: { $ne: true } }).limit(50);
+  let linked = 0;
+  for (const app of apps) {
+    try {
+      const vacancy = app.vacancy && (await Vacancy.findById(app.vacancy));
+      const jobId = await ensureOdooJob(vacancy, app.position);
+      if (jobId) await odooCall('hr.applicant', 'write', { ids: [app.odooId], vals: { job_id: jobId } });
+      await Application.updateOne({ _id: app._id }, { $set: { odooJobLinked: true } });
+      if (jobId) linked += 1;
+    } catch (err) {
+      console.error(`[odoo] linking job for application ${app.id} failed:`, err.message);
+    }
+  }
+  if (linked) log(`linked ${linked} applicant(s) to their Odoo job`);
+  return linked;
+};
+
 export const runOdooSync = async () => {
   const vacancies = await syncVacancies();
   const retried = await retryPending();
+  await linkMissingJobs().catch((err) => console.error('[odoo] job linking failed:', err.message));
   const statuses = await pullStatuses().catch((err) => {
     console.error('[odoo] status sync failed:', err.message);
     return { error: err.message };
