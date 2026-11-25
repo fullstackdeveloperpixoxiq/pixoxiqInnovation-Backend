@@ -8,6 +8,7 @@ import asyncHandler from '../utils/asyncHandler.js';
 import { buildListQuery } from '../utils/queryBuilder.js';
 import { pickFields } from './crudFactory.js';
 import { queueApplication } from '../services/odooSync.js';
+import { pushStatus } from '../services/odooStatus.js';
 
 // ---------- Public ----------
 
@@ -100,8 +101,10 @@ export const getApplication = asyncHandler(async (req, res) => {
 export const updateApplication = asyncHandler(async (req, res) => {
   const application = await Application.findById(req.params.id);
   if (!application) throw ApiError.notFound('Application not found');
+  const previousStatus = application.status;
   application.set(pickFields(req.body, ['status', 'notes']));
   await application.save();
+  if (application.status !== previousStatus) pushStatus(application); // move the applicant in Odoo too (background)
   await application.populate('vacancy', 'title department');
   res.json({ success: true, message: 'Application updated', data: application });
 });

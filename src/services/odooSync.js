@@ -4,6 +4,7 @@ import Application from '../models/Application.js';
 import StoredFile from '../models/StoredFile.js';
 import env from '../config/env.js';
 import { isOdooEnabled, odooCall, odooFields } from './odoo.js';
+import { pullStatuses } from './odooStatus.js';
 
 // Website <-> Odoo sync:
 //  - Vacancies: published jobs in Odoo Recruitment (hr.job) are copied into the website's vacancies
@@ -151,6 +152,8 @@ const pushOne = async (doc, push, label) => {
     doc.odooId = id;
     doc.odooSyncedAt = new Date();
     doc.odooError = '';
+    // A new applicant starts in Odoo's first stage, which matches "new"
+    if (label === 'application' && doc.status === 'new') doc.odooStatus = 'new';
     await doc.save();
     log(`${label} ${doc.id} -> Odoo #${id}`);
   } catch (err) {
@@ -183,7 +186,12 @@ export const retryPending = async () => {
 export const runOdooSync = async () => {
   const vacancies = await syncVacancies();
   const retried = await retryPending();
-  return { vacancies, retried };
+  const statuses = await pullStatuses().catch((err) => {
+    console.error('[odoo] status sync failed:', err.message);
+    return { error: err.message };
+  });
+  if (statuses.updated) log(`statuses: ${statuses.updated} updated from Odoo`);
+  return { vacancies, retried, statuses };
 };
 
 export const startOdooSync = () => {

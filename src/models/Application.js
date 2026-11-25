@@ -33,6 +33,8 @@ const applicationSchema = new mongoose.Schema(
     odooSyncedAt: Date,
     odooAttempts: { type: Number, default: 0 },
     odooError: { type: String, default: '' },
+    // Status both sides last agreed on (see services/odooStatus.js)
+    odooStatus: { type: String, enum: [...APPLICATION_STATUSES, null], default: null },
   },
   { timestamps: true }
 );
