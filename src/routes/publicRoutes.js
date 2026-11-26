@@ -3,7 +3,7 @@ import vacancyController from '../controllers/vacancyController.js';
 import certificateController from '../controllers/certificateController.js';
 import certificateImageController from '../controllers/certificateImageController.js';
 import serviceController from '../controllers/serviceController.js';
-import { submitMessage } from '../controllers/messageController.js';
+import { submitMessage, MAX_ATTACHMENTS } from '../controllers/messageController.js';
 import { submitApplication } from '../controllers/applicationController.js';
 import { getPublicCard } from '../controllers/visitingCardController.js';
 import { getPublicEmployeeCard } from '../controllers/employeeController.js';
@@ -21,6 +21,12 @@ const resumeUpload = createUploader('applications', {
   databaseFields: ['resume'],
   databaseTypes: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf', DOCX_TYPE],
 }).single('resume');
+
+// Contact form attachments (ideas, product photos, specs): up to 3 PDF/image files, 5 MB each
+const contactUpload = createUploader('messages', {
+  databaseFields: ['attachments'],
+  databaseTypes: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
+}).array('attachments', MAX_ATTACHMENTS);
 
 // Unauthenticated endpoints consumed by the public website
 const router = Router();
@@ -45,7 +51,7 @@ router.post('/cookie-consent', cookieConsentLimiter, optionalUser, saveConsent);
 router.get('/cookie-consent/:visitorId', getConsent);
 router.delete('/cookie-consent/:visitorId', cookieConsentLimiter, withdrawConsent);
 
-router.post('/contact', formLimiter, submitMessage);
+router.post('/contact', formLimiter, contactUpload, submitMessage);
 router.post('/applications', formLimiter, optionalUser, resumeUpload, submitApplication);
 
 export default router;

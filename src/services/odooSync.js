@@ -73,6 +73,16 @@ export const syncVacancies = async () => {
 
 // ---------- Contact messages (website -> CRM lead) ----------
 
+const attachFiles = async (model, resId, files) => {
+  for (const { id, name } of files) {
+    const file = await StoredFile.findById(id);
+    if (!file?.data) continue;
+    await odooCall('ir.attachment', 'create', {
+      vals_list: [{ name: name || file.filename || 'file', datas: Buffer.from(file.data).toString('base64'), mimetype: file.contentType, res_model: model, res_id: resId }],
+    });
+  }
+};
+
 export const pushMessage = async (message) => {
   const [id] = await odooCall('crm.lead', 'create', {
     vals_list: [
@@ -86,6 +96,8 @@ export const pushMessage = async (message) => {
       },
     ],
   });
+  // Files the visitor attached go to the lead too
+  await attachFiles('crm.lead', id, (message.attachments || []).map((a) => ({ id: a.file, name: a.name })));
   return id;
 };
 

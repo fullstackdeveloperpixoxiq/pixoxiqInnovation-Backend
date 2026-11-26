@@ -23,6 +23,20 @@ const messageSchema = new mongoose.Schema(
     company: { type: String, trim: true, maxlength: 120, default: '' },
     message: { type: String, required: [true, 'Message is required'], trim: true, maxlength: 5000 },
     status: { type: String, enum: MESSAGE_STATUSES, default: 'new' },
+    // Optional files from the visitor (ideas, product photos, specs): PDF or images kept in the
+    // database and served to admins only
+    attachments: {
+      type: [
+        {
+          _id: false,
+          file: { type: mongoose.Schema.Types.ObjectId, ref: 'StoredFile', required: true },
+          name: { type: String, trim: true, maxlength: 200, default: '' },
+          contentType: { type: String, default: '' },
+          size: { type: Number, default: 0 },
+        },
+      ],
+      default: [],
+    },
     notes: { type: String, trim: true, maxlength: 2000, default: '' },
     readAt: Date,
     // Odoo sync: id of the record created in Odoo, null until pushed
