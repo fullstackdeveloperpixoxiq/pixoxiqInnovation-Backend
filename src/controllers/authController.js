@@ -58,20 +58,20 @@ export const listAdmins = asyncHandler(async (req, res) => {
 
 export const createAdmin = asyncHandler(async (req, res) => {
   const { name, email, password, role } = req.body;
-  const admin = await Admin.create({ name, email, password, role: role === 'superadmin' ? 'superadmin' : 'admin' });
+  const admin = await Admin.create({ name, email, password, role: ['superadmin', 'sales'].includes(role) ? role : 'admin' });
   res.status(201).json({ success: true, message: 'Admin created', data: admin });
 });
 
 export const updateAdmin = asyncHandler(async (req, res) => {
   const admin = await Admin.findById(req.params.id);
   if (!admin) throw ApiError.notFound('Admin not found');
-  if (admin.id === req.admin.id && (req.body.isActive === false || req.body.role === 'admin')) {
+  if (admin.id === req.admin.id && (req.body.isActive === false || ['admin', 'sales'].includes(req.body.role))) {
     throw ApiError.badRequest('You cannot disable or demote your own account');
   }
   ['name', 'email'].forEach((key) => {
     if (typeof req.body[key] === 'string') admin[key] = req.body[key];
   });
-  if (['admin', 'superadmin'].includes(req.body.role)) admin.role = req.body.role;
+  if (['admin', 'superadmin', 'sales'].includes(req.body.role)) admin.role = req.body.role;
   if (typeof req.body.isActive === 'boolean') admin.isActive = req.body.isActive;
   if (req.body.password) admin.password = String(req.body.password);
   await admin.save();
