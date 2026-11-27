@@ -21,7 +21,8 @@ const adminSchema = new mongoose.Schema(
       minlength: [8, 'Password must be at least 8 characters'],
       select: false,
     },
-    role: { type: String, enum: ['superadmin', 'admin'], default: 'admin' },
+    // hr: Job Queries only (enforced in middleware/auth.js)
+    role: { type: String, enum: ['superadmin', 'admin', 'hr'], default: 'admin' },
     isActive: { type: Boolean, default: true },
     lastLogin: Date,
     passwordChangedAt: Date,

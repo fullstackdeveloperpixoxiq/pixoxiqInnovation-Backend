@@ -31,7 +31,15 @@ const chatSettingsSchema = new mongoose.Schema(
     minRelevance: { type: Number, min: 0, max: 1, default: 0.2 },
     // Abuse limits
     maxMessageLength: { type: Number, min: 100, max: 8000, default: 2000 },
-    dailyMessageLimit: { type: Number, min: 1, max: 5000, default: 100 },
+    // Daily question quotas, reset at midnight IST (enforced in ai/quotaService.js)
+    visitorDailyQuestionLimit: { type: Number, min: 1, max: 5000, default: 10 },
+    userDailyQuestionLimit: { type: Number, min: 1, max: 5000, default: 100 },
+    // Visitor questions per network (IP) per day, so clearing cookies cannot reset the visitor
+    // quota indefinitely. 0 = no per-network ceiling.
+    visitorIpDailyLimit: { type: Number, min: 0, max: 100000, default: 30 },
+    // Provider prices in USD per 1M tokens, used for cost estimates in the admin panel (0 = unknown)
+    inputTokenPricePerMillion: { type: Number, min: 0, max: 10000, default: 0 },
+    outputTokenPricePerMillion: { type: Number, min: 0, max: 10000, default: 0 },
     // Conversations older than this are deleted automatically (0 = keep forever)
     retentionDays: { type: Number, min: 0, max: 3650, default: 180 },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },

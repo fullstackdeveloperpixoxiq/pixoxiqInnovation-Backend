@@ -3,12 +3,16 @@ import connectDB from './src/config/db.js';
 import app from './src/app.js';
 import { startAiBackgroundJobs } from './src/ai/maintenance.js';
 import { startOdooSync } from './src/services/odooSync.js';
+import { loadOdooConnection } from './src/services/odoo.js';
+import { startRecruitmentSync } from './src/services/recruitmentSync.js';
 import { emailStatus } from './src/services/emailService.js';
 
 const start = async () => {
   await connectDB();
   startAiBackgroundJobs();
+  await loadOdooConnection().catch((err) => console.error('[odoo] could not load settings:', err.message));
   startOdooSync();
+  startRecruitmentSync();
 
   const server = app.listen(env.port, () => {
     console.log(`🚀 API running on http://localhost:${env.port} (${env.nodeEnv})`);

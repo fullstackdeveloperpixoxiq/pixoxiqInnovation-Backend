@@ -46,6 +46,13 @@ const retrievalQuery = (history, message) => {
   return previousUser ? `${message}\n${previousUser.content.slice(0, 500)}` : message;
 };
 
+// Recruitment topics of knowledge-base entries (by category/title) withheld from visitors who
+// are not logged in or email-verified
+const RECRUITMENT_RE = /\b(career|careers|job|jobs|vacanc\w*|recruit\w*|hiring|intern\w*|salary|salaries)\b/i;
+
+const RECRUITMENT_RULE =
+  'Access rule: this visitor is NOT logged in and has NOT verified an email address. Do not give any information about jobs, vacancies, recruitment, applications, interviews, internships or salaries. If asked, reply only that career questions need them to log in or verify their email in this chat.';
+
 /**
  * Generates an assistant reply.
  * @param {object} p
@@ -55,8 +62,11 @@ const retrievalQuery = (history, message) => {
  * @param {AbortSignal} [p.signal]
  * @param {(text: string) => void} [p.onDelta] stream callback; omit for a non-streaming call
  * @param {(sources: Array) => void} [p.onSources]
+ * @param {boolean} [p.allowRecruitment]      visitor is logged in or email-verified: recruitment data may be used
+ * @param {boolean} [p.jobIntent]             the classifier found a job enquiry (always include open positions)
+ * @param {string} [p.extraInstructions]     server-side guidance appended to the system prompt
  */
-export const generateReply = async ({ history = [], message, summary = '', signal, onDelta, onSources }) => {
+export const generateReply = async ({ history = [], message, summary = '', signal, onDelta, onSources, allowRecruitment = true, jobIntent = false, extraInstructions = '' }) => {
   const settings = await getChatSettings();
   const chatClient = await getChatClient();
   const embeddingClient = await getEmbeddingClient();
@@ -65,7 +75,7 @@ export const generateReply = async ({ history = [], message, summary = '', signa
   // Live website data (services, contact, certifications, vacancies) read straight from the
   // database. Knowledge entries imported from the website are skipped in the search below:
   // the live data replaces them, so nothing is duplicated or stale.
-  const company = await getCompanyContexts(query);
+  const company = await getCompanyContexts(query, { careers: allowRecruitment ? (jobIntent ? 'always' : 'auto') : 'never' });
 
   let retrieval;
   try {
@@ -82,8 +92,11 @@ export const generateReply = async ({ history = [], message, summary = '', signa
     throw err;
   }
 
-  // One numbered source per knowledge entry (its chunks grouped), so the [n] citations in the
-  // answer match the n-th item of `sources` shown to the visitor
+  // One source per knowledge entry (its chunks grouped). Attribution travels as metadata
+  // (`sources`), never as markers inside the answer text
+  if (!allowRecruitment) {
+    retrieval.results = retrieval.results.filter((r) => !RECRUITMENT_RE.test(`${r.category || ''} ${r.title || ''}`));
+  }
   const grouped = company.map((c) => ({ entryId: null, title: c.title, category: c.category, score: 1, texts: [c.text] }));
   retrieval.results.forEach((r) => {
     const existing = grouped.find((g) => g.entryId && g.entryId === r.entryId);
@@ -93,11 +106,12 @@ export const generateReply = async ({ history = [], message, summary = '', signa
   const sources = grouped.map((g) => ({ entry: g.entryId || undefined, title: g.title, category: g.category, score: g.score }));
   onSources?.(sources);
 
-  const system = buildSystemPrompt({
+  const baseSystem = buildSystemPrompt({
     settings,
     contexts: grouped.map((g) => ({ title: g.title, category: g.category, text: g.texts.join('\n[…]\n') })),
     summary,
   });
+  const system = [baseSystem, !allowRecruitment && RECRUITMENT_RULE, extraInstructions].filter(Boolean).join('\n\n');
   const messages = normalizeTurns([...history, { role: 'user', content: message }]);
 
   const started = Date.now();

@@ -155,6 +155,19 @@ export const registrationOtpEmail = ({ name, otp, minutes }) => ({
   text: `Your PIXOXIQ verification code is ${otp}. It expires in ${minutes} minutes. If you did not sign up, ignore this email.`,
 });
 
+// AI assistant: email ownership code for career questions (no account is created)
+export const chatVerificationOtpEmail = ({ otp, minutes }) => ({
+  subject: `${otp} is your PIXOXIQ verification code`,
+  html: layout({
+    title: 'Verify your email',
+    bodyHtml: `<h1 style="margin:0 0 12px;font-size:22px;color:#fff">Verify your email</h1>
+<p style="margin:0 0 20px">Use this code in the PIXOXIQ assistant to continue with your career questions:</p>
+<p style="margin:0 0 24px;font-size:32px;font-weight:700;letter-spacing:8px;color:${BRAND}">${escapeHtml(otp)}</p>
+<p style="margin:0;font-size:13px;color:#8a8a8a">This code expires in ${minutes} minutes. If you did not request it, ignore this email.</p>`,
+  }),
+  text: `Your PIXOXIQ verification code is ${otp}. Use it in the PIXOXIQ assistant to continue with your career questions. It expires in ${minutes} minutes. If you did not request it, ignore this email.`,
+});
+
 // Turns a plain-text newsletter body into safe HTML paragraphs (links become clickable)
 const textToHtml = (text) =>
   text

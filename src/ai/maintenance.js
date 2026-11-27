@@ -2,6 +2,8 @@ import ChatConversation from '../models/ChatConversation.js';
 import ChatMessage from '../models/ChatMessage.js';
 import { getChatSettings } from './chatService.js';
 import { recoverIndexing } from './indexer.js';
+import { deleteEnquiriesFor } from './enquiryService.js';
+import { backfillQueryTypes } from './queryBackfill.js';
 
 // Background jobs of the AI assistant: resume interrupted indexing on startup and delete
 // conversations older than the retention period set in the admin panel.
@@ -15,6 +17,8 @@ export const purgeOldConversations = async () => {
   const ids = await ChatConversation.find({ lastMessageAt: { $lt: cutoff } }).distinct('_id');
   if (!ids.length) return 0;
   await ChatMessage.deleteMany({ conversation: { $in: ids } });
+  // Enquiry records follow the retention period of their conversation
+  await deleteEnquiriesFor(ids);
   await ChatConversation.deleteMany({ _id: { $in: ids } });
   console.log(`[ai] deleted ${ids.length} conversation(s) older than ${retentionDays} days`);
   return ids.length;
@@ -22,6 +26,7 @@ export const purgeOldConversations = async () => {
 
 export const startAiBackgroundJobs = () => {
   recoverIndexing().catch((err) => console.error('[ai] could not resume indexing:', err.message));
+  backfillQueryTypes().catch((err) => console.error('[ai] conversation classification backfill failed:', err.message));
   const run = () => purgeOldConversations().catch((err) => console.error('[ai] retention cleanup failed:', err.message));
   setTimeout(run, 60 * 1000).unref();
   setInterval(run, SIX_HOURS).unref();

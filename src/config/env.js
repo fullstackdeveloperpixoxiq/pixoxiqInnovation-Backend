@@ -35,6 +35,12 @@ const env = {
     encryptionKey: process.env.AI_ENCRYPTION_KEY || '',
     // Per-IP limits for the public chat endpoints
     chatRequestsPerMinute: Number(process.env.CHAT_RATE_LIMIT_PER_MINUTE) || 12,
+    // Per-visitor/user burst limit on the same endpoints (catches many identities behind one IP
+    // and one identity spread over many IPs)
+    chatIdentityRequestsPerMinute: Number(process.env.CHAT_IDENTITY_RATE_LIMIT_PER_MINUTE) || 8,
+    // Email verification codes for job enquiries in the assistant (minutes until a code expires)
+    chatOtpRequestsPer15Min: Number(process.env.CHAT_OTP_REQUESTS_PER_15_MIN) || 15,
+    chatOtpTtlMinutes: Math.min(Math.max(Number(process.env.CHAT_OTP_TTL_MINUTES) || 10, 2), 60),
     sessionsPerHour: Number(process.env.CHAT_SESSIONS_PER_HOUR) || 30,
     // Timeout for a single provider request (ms)
     providerTimeoutMs: Number(process.env.AI_PROVIDER_TIMEOUT_MS) || 90000,

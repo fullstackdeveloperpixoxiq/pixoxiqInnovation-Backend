@@ -31,6 +31,12 @@ const chatMessageSchema = new mongoose.Schema(
     interrupted: { type: Boolean, default: false },
     // Produced by "regenerate" (counts towards the visitor's daily limit)
     regenerated: { type: Boolean, default: false },
+    // User messages: classified intent and confidence (0-1)
+    intent: { type: String, default: undefined },
+    intentConfidence: { type: Number, default: undefined },
+    topic: { type: String, default: undefined },
+    // The answer was withheld until the visitor logs in or verifies their email
+    awaitingVerification: { type: Boolean, default: undefined },
   },
   { timestamps: true }
 );

@@ -4,6 +4,10 @@ import ChatMessage from '../models/ChatMessage.js';
 import KnowledgeEntry, { KNOWLEDGE_STATUSES } from '../models/KnowledgeEntry.js';
 import KnowledgeChunk from '../models/KnowledgeChunk.js';
 import AiLog, { AI_LOG_SOURCES } from '../models/AiLog.js';
+import ChatUsage from '../models/ChatUsage.js';
+import { deleteEnquiriesFor } from '../ai/enquiryService.js';
+import User from '../models/User.js';
+import { QUOTA_TIMEZONE, quotaDay, shiftDay, subjectTag } from '../ai/quotaService.js';
 import ApiError from '../utils/ApiError.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import { paginate } from '../utils/queryBuilder.js';
@@ -219,6 +223,173 @@ export const getUsage = asyncHandler(async (req, res) => {
   });
 });
 
+// ---------- Daily question quotas (IST days) ----------
+
+const estimateCost = (inputTokens, outputTokens, settings) => {
+  const inPrice = settings.inputTokenPricePerMillion || 0;
+  const outPrice = settings.outputTokenPricePerMillion || 0;
+  if (!inPrice && !outPrice) return null;
+  return Math.round(((inputTokens / 1e6) * inPrice + (outputTokens / 1e6) * outPrice) * 10000) / 10000;
+};
+
+// Questions asked by the subject itself (a user's counter also holds visitor questions carried
+// over at login, which are already counted on the visitor's counter)
+const OWN_QUESTIONS = { $subtract: ['$used', { $ifNull: ['$carriedOver', 0] }] };
+
+export const getQuota = asyncHandler(async (req, res) => {
+  const days = [7, 30, 90].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
+  const { day: today, resetsAt } = quotaDay();
+  const from = shiftDay(today, days - 1);
+  const range = { isPrimary: true, day: { $gte: from, $lte: today } };
+
+  const [settings, dailyRows, todayRows, topRows, blockedNetworks] = await Promise.all([
+    getChatSettings(),
+    ChatUsage.aggregate([
+      { $match: range },
+      {
+        $group: {
+          _id: '$day',
+          userQuestions: { $sum: { $cond: ['$authenticated', OWN_QUESTIONS, 0] } },
+          visitorQuestions: { $sum: { $cond: ['$authenticated', 0, OWN_QUESTIONS] } },
+          activeUsers: { $sum: { $cond: ['$authenticated', 1, 0] } },
+          activeVisitors: { $sum: { $cond: ['$authenticated', 0, 1] } },
+          failed: { $sum: '$failed' },
+          inputTokens: { $sum: '$inputTokens' },
+          outputTokens: { $sum: '$outputTokens' },
+        },
+      },
+    ]),
+    ChatUsage.aggregate([
+      { $match: { isPrimary: true, day: today } },
+      {
+        $group: {
+          _id: '$authenticated',
+          subjects: { $sum: 1 },
+          questions: { $sum: OWN_QUESTIONS },
+          atLimit: { $sum: { $cond: [{ $gte: ['$used', '$limit'] }, 1, 0] } },
+          utilization: { $avg: { $min: [1, { $divide: ['$used', { $max: ['$limit', 1] }] }] } },
+          failed: { $sum: '$failed' },
+          inputTokens: { $sum: '$inputTokens' },
+          outputTokens: { $sum: '$outputTokens' },
+        },
+      },
+    ]),
+    ChatUsage.aggregate([
+      { $match: range },
+      {
+        $group: {
+          _id: '$subjectKey',
+          authenticated: { $first: '$authenticated' },
+          user: { $first: '$user' },
+          questions: { $sum: OWN_QUESTIONS },
+          failed: { $sum: '$failed' },
+          inputTokens: { $sum: '$inputTokens' },
+          outputTokens: { $sum: '$outputTokens' },
+          activeDays: { $sum: 1 },
+          lastActive: { $max: '$updatedAt' },
+        },
+      },
+      { $match: { questions: { $gt: 0 } } },
+      { $sort: { questions: -1, lastActive: -1 } },
+      { $limit: 10 },
+      { $lookup: { from: User.collection.name, localField: 'user', foreignField: '_id', as: 'account' } },
+    ]),
+    ChatUsage.countDocuments({ subjectType: 'ip', day: today, $expr: { $gte: ['$used', '$limit'] } }),
+  ]);
+
+  const byDay = Object.fromEntries(dailyRows.map((r) => [r._id, r]));
+  const daily = [];
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const date = shiftDay(today, i);
+    const r = byDay[date] || {};
+    const inputTokens = r.inputTokens || 0;
+    const outputTokens = r.outputTokens || 0;
+    daily.push({
+      date,
+      label: new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }),
+      userQuestions: r.userQuestions || 0,
+      visitorQuestions: r.visitorQuestions || 0,
+      questions: (r.userQuestions || 0) + (r.visitorQuestions || 0),
+      activeUsers: r.activeUsers || 0,
+      activeVisitors: r.activeVisitors || 0,
+      failed: r.failed || 0,
+      inputTokens,
+      outputTokens,
+      estimatedCost: estimateCost(inputTokens, outputTokens, settings),
+    });
+  }
+
+  const users = todayRows.find((r) => r._id === true) || {};
+  const visitors = todayRows.find((r) => r._id === false) || {};
+  const todayIn = (users.inputTokens || 0) + (visitors.inputTokens || 0);
+  const todayOut = (users.outputTokens || 0) + (visitors.outputTokens || 0);
+  const pct = (v) => Math.round((v || 0) * 1000) / 10;
+
+  const rangeTotals = daily.reduce(
+    (acc, d) => ({
+      questions: acc.questions + d.questions,
+      userQuestions: acc.userQuestions + d.userQuestions,
+      visitorQuestions: acc.visitorQuestions + d.visitorQuestions,
+      failed: acc.failed + d.failed,
+      inputTokens: acc.inputTokens + d.inputTokens,
+      outputTokens: acc.outputTokens + d.outputTokens,
+    }),
+    { questions: 0, userQuestions: 0, visitorQuestions: 0, failed: 0, inputTokens: 0, outputTokens: 0 }
+  );
+  rangeTotals.estimatedCost = estimateCost(rangeTotals.inputTokens, rangeTotals.outputTokens, settings);
+
+  res.json({
+    success: true,
+    data: {
+      days,
+      today,
+      resetsAt,
+      timezone: QUOTA_TIMEZONE,
+      limits: {
+        visitor: settings.visitorDailyQuestionLimit,
+        user: settings.userDailyQuestionLimit,
+        visitorIp: settings.visitorIpDailyLimit,
+      },
+      pricing: {
+        configured: estimateCost(1, 1, settings) !== null,
+        inputPerMillion: settings.inputTokenPricePerMillion || 0,
+        outputPerMillion: settings.outputTokenPricePerMillion || 0,
+      },
+      todayTotals: {
+        questions: (users.questions || 0) + (visitors.questions || 0),
+        userQuestions: users.questions || 0,
+        visitorQuestions: visitors.questions || 0,
+        activeUsers: users.subjects || 0,
+        activeVisitors: visitors.subjects || 0,
+        usersAtLimit: users.atLimit || 0,
+        visitorsAtLimit: visitors.atLimit || 0,
+        userUtilization: pct(users.utilization),
+        visitorUtilization: pct(visitors.utilization),
+        failed: (users.failed || 0) + (visitors.failed || 0),
+        inputTokens: todayIn,
+        outputTokens: todayOut,
+        estimatedCost: estimateCost(todayIn, todayOut, settings),
+        blockedNetworks,
+      },
+      rangeTotals,
+      daily,
+      // Visitors are shown by a short non-reversible tag only
+      topUsers: topRows.map((r) => ({
+        id: subjectTag(r._id),
+        type: r.authenticated ? 'user' : 'visitor',
+        name: r.account?.[0]?.name || '',
+        email: r.account?.[0]?.email || '',
+        questions: r.questions,
+        failed: r.failed,
+        inputTokens: r.inputTokens,
+        outputTokens: r.outputTokens,
+        activeDays: r.activeDays,
+        lastActive: r.lastActive,
+      })),
+    },
+  });
+});
+
 export const listLogs = asyncHandler(async (req, res) => {
   const query = { ...req.query };
   if (query.source && !AI_LOG_SOURCES.includes(query.source)) delete query.source;
@@ -257,5 +428,6 @@ export const deleteConversation = asyncHandler(async (req, res) => {
   const conversation = await ChatConversation.findByIdAndDelete(req.params.id);
   if (!conversation) throw ApiError.notFound('Conversation not found');
   await ChatMessage.deleteMany({ conversation: conversation._id });
+  await deleteEnquiriesFor(conversation._id);
   res.json({ success: true, message: 'Conversation deleted', data: { id: conversation.id } });
 });

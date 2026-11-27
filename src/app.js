@@ -43,7 +43,7 @@ app.use((req, res, next) => (req.method === 'OPTIONS' ? res.sendStatus(204) : ne
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
-if (!env.isProd) app.use(morgan('dev'));
+if (!env.isProd && env.nodeEnv !== 'test') app.use(morgan('dev'));
 
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads'), { maxAge: '7d' }));
 

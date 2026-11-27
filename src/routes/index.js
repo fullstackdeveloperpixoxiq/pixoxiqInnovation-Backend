@@ -7,7 +7,8 @@ import certificateImageController from '../controllers/certificateImageControlle
 import employeeController from '../controllers/employeeController.js';
 import serviceController from '../controllers/serviceController.js';
 import { getStats } from '../controllers/dashboardController.js';
-import { getOdooStatus, syncOdooNow } from '../controllers/odooController.js';
+import { getOdooConfig, getOdooStatus, listOdooJobs, syncOdooNow, testOdooConfig, updateOdooConfig } from '../controllers/odooController.js';
+import { aiAdminLimiter } from '../middleware/rateLimit.js';
 import resourceRouter from './resourceRouter.js';
 import authRoutes from './authRoutes.js';
 import publicRoutes from './publicRoutes.js';
@@ -34,6 +35,11 @@ router.use('/account', accountRoutes);
 router.get('/dashboard/stats', protect, getStats);
 router.get('/odoo/status', protect, getOdooStatus);
 router.post('/odoo/sync', protect, authorize('superadmin'), syncOdooNow);
+// Odoo connection + Recruitment integration settings (credentials never leave the server)
+router.get('/odoo/config', protect, authorize('superadmin'), getOdooConfig);
+router.put('/odoo/config', protect, authorize('superadmin'), updateOdooConfig);
+router.post('/odoo/config/test', protect, authorize('superadmin'), aiAdminLimiter, testOdooConfig);
+router.get('/odoo/jobs', protect, authorize('superadmin'), aiAdminLimiter, listOdooJobs);
 router.use('/vacancies', protect, resourceRouter(vacancyController));
 router.use('/services', protect, resourceRouter(serviceController));
 router.use(

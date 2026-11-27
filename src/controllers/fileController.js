@@ -3,11 +3,14 @@ import StoredFile from '../models/StoredFile.js';
 import ApiError from '../utils/ApiError.js';
 import asyncHandler from '../utils/asyncHandler.js';
 
+const PRIVATE_PURPOSES = ['application/resume', 'chat-enquiry/resume'];
+
 // Public: serves a file kept in the database (e.g. the visiting card profile photo).
 // Every upload gets a new id, so a given URL never changes content and can be cached forever.
 export const getFile = asyncHandler(async (req, res) => {
   const file = mongoose.isValidObjectId(req.params.id) ? await StoredFile.findById(req.params.id) : null;
-  if (!file) throw ApiError.notFound('File not found');
+  // Candidate CVs are private: only admins can download them, through their own endpoints
+  if (!file || PRIVATE_PURPOSES.includes(file.purpose)) throw ApiError.notFound('File not found');
 
   res.set({
     'Content-Type': file.contentType,

@@ -219,7 +219,11 @@ const SETTINGS_FIELDS = [
   'retrievalTopK',
   'minRelevance',
   'maxMessageLength',
-  'dailyMessageLimit',
+  'visitorDailyQuestionLimit',
+  'userDailyQuestionLimit',
+  'visitorIpDailyLimit',
+  'inputTokenPricePerMillion',
+  'outputTokenPricePerMillion',
   'retentionDays',
 ];
 

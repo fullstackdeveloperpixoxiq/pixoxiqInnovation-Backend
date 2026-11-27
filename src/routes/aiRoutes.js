@@ -16,9 +16,12 @@ import {
   testChat,
 } from '../controllers/aiConfigController.js';
 import * as knowledge from '../controllers/knowledgeController.js';
+import { archiveGeneralQuery, getGeneralQuery, getGeneralQueryStats, listGeneralQueries } from '../controllers/generalQueryController.js';
+import { getEnquiry, getEnquiryResume, getEnquiryStats, listEnquiries, listSyncLogs, syncEnquiry, updateEnquiryStatus } from '../controllers/enquiryController.js';
 import {
   getOverview,
   getUsage,
+  getQuota,
   listLogs,
   clearLogs,
   listConversations,
@@ -35,6 +38,7 @@ const uploadDocument = createDocumentUploader({ maxMb: env.ai.maxDocumentMb, ext
 // Dashboard & analytics
 router.get('/overview', getOverview);
 router.get('/usage', getUsage);
+router.get('/quota', getQuota);
 router.get('/logs', listLogs);
 router.delete('/logs', superadmin, clearLogs);
 
@@ -62,6 +66,28 @@ router.post('/knowledge/search', aiAdminLimiter, knowledge.searchTest);
 router.route('/knowledge/:id').get(knowledge.getEntry).put(knowledge.updateEntry).delete(knowledge.deleteEntry);
 router.put('/knowledge/:id/file', uploadDocument, knowledge.replaceDocument);
 router.post('/knowledge/:id/reindex', knowledge.reindexEntry);
+
+// Job Queries: recruitment enquiries (superadmin, admin, HR). HR accounts are limited to these
+// routes in middleware/auth.js; everything else in this router is admin-only.
+const jobQueries = Router();
+jobQueries.use(authorize('superadmin', 'admin', 'hr'));
+jobQueries.get('/', listEnquiries);
+jobQueries.get('/stats', getEnquiryStats);
+jobQueries.get('/:id', getEnquiry);
+jobQueries.patch('/:id/status', updateEnquiryStatus);
+jobQueries.post('/:id/sync', aiAdminLimiter, syncEnquiry);
+jobQueries.get('/:id/sync-logs', listSyncLogs);
+jobQueries.get('/:id/resume', getEnquiryResume);
+router.use('/job-queries', jobQueries);
+
+// Normal / General Queries: all non-recruitment conversations (superadmin, admin)
+const generalQueries = Router();
+generalQueries.use(authorize('superadmin', 'admin'));
+generalQueries.get('/', listGeneralQueries);
+generalQueries.get('/stats', getGeneralQueryStats);
+generalQueries.get('/:id', getGeneralQuery);
+generalQueries.patch('/:id/archive', archiveGeneralQuery);
+router.use('/general-queries', generalQueries);
 
 // Conversations
 router.get('/conversations', listConversations);

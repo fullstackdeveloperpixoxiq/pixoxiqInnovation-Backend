@@ -30,7 +30,7 @@ const htmlToText = (html) =>
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
-const many2oneName = (value) => (Array.isArray(value) ? value[1] : '');
+export const many2oneName = (value) => (Array.isArray(value) ? value[1] : '');
 
 // ---------- Vacancies (Odoo -> website) ----------
 
@@ -105,7 +105,7 @@ export const pushMessage = async (message) => {
 
 // Odoo job position for an application. Vacancies created in the admin panel have no Odoo job
 // yet: find one with the same name, or create it (unpublished, so Odoo's own website is unchanged).
-const ensureOdooJob = async (vacancy, position) => {
+export const ensureOdooJob = async (vacancy, position) => {
   if (vacancy?.odooId) return vacancy.odooId;
   const name = String(vacancy?.title || position || '').trim();
   if (!name) return null;
@@ -254,13 +254,14 @@ export const runOdooSync = async () => {
   return { vacancies, retried, statuses };
 };
 
+// Runs on a timer; skips quietly while Odoo is not configured, so settings saved later in the
+// admin panel take effect without a restart
 export const startOdooSync = () => {
-  if (!isOdooEnabled()) {
-    log('not configured (set ODOO_URL, ODOO_DB, ODOO_API_KEY to enable)');
-    return;
-  }
-  const run = () => runOdooSync().catch((err) => console.error('[odoo] sync failed:', err.message));
-  log(`enabled, syncing every ${env.odoo.syncMinutes} min`);
+  log(isOdooEnabled() ? `enabled, syncing every ${env.odoo.syncMinutes} min` : 'not configured yet (admin panel or ODOO_* variables)');
+  const run = () => {
+    if (!isOdooEnabled()) return;
+    runOdooSync().catch((err) => console.error('[odoo] sync failed:', err.message));
+  };
   setTimeout(run, 10 * 1000).unref();
   setInterval(run, env.odoo.syncMinutes * 60 * 1000).unref();
 };

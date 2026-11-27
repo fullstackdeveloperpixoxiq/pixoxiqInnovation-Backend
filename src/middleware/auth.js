@@ -18,9 +18,25 @@ export const protect = asyncHandler(async (req, res, next) => {
     throw ApiError.unauthorized('Password changed, please log in again');
   }
 
+  // HR accounts may only use Job Queries (and their own profile); enforced here for every
+  // protected route, so hiding menu items in the admin panel is not the only barrier
+  if (admin.role === 'hr' && !hrAllowed(req)) throw ApiError.forbidden('Your HR account can only access Job Queries');
+
   req.admin = admin;
   next();
 });
+
+const HR_ROUTES = [
+  { method: 'GET', re: /^\/api\/auth\/me$/ },
+  { method: 'PATCH', re: /^\/api\/auth\/me(\/password)?$/ },
+  { method: '*', re: /^\/api\/ai\/job-queries(\/.*)?$/ },
+  // Vacancy names for the Job Queries filter (read only)
+  { method: 'GET', re: /^\/api\/vacancies\/?$/ },
+];
+const hrAllowed = (req) => {
+  const path = req.originalUrl.split('?')[0].replace(/\/+$/, '') || '/';
+  return HR_ROUTES.some((r) => (r.method === '*' || r.method === req.method) && r.re.test(path));
+};
 
 export const authorize = (...roles) => (req, res, next) => {
   if (!roles.includes(req.admin.role)) return next(ApiError.forbidden('You do not have permission for this action'));

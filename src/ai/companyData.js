@@ -67,7 +67,9 @@ const matchServices = (services, query) => {
  * <source> in the system prompt, before the knowledge-base sources.
  * @returns {Promise<Array<{ title, category, text }>>}
  */
-export const getCompanyContexts = async (query) => {
+// careers: 'auto' = when the question mentions careers, 'always' (classified job enquiry),
+// 'never' (visitor not authorised for recruitment information)
+export const getCompanyContexts = async (query, { careers = 'auto' } = {}) => {
   const { services, vacancies, certificates, card } = await load();
   const site = siteOf(card);
   const contexts = [];
@@ -135,7 +137,7 @@ export const getCompanyContexts = async (query) => {
     });
   }
 
-  if (CAREER_RE.test(query)) {
+  if (careers === 'always' || (careers === 'auto' && CAREER_RE.test(query))) {
     contexts.push({
       title: 'Open positions at PIXOXIQ',
       category: 'Careers',

@@ -36,6 +36,27 @@ export const chatLimiter = rateLimit({
   message: { success: false, message: 'You are sending messages too quickly. Please wait a moment.' },
 });
 
+// AI assistant: messages per visitor / logged-in user, whatever IP they come from.
+// Runs after requireVisitor, optionalUser and visitorCookie.
+export const chatIdentityLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: env.ai.chatIdentityRequestsPerMinute,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => (req.user ? `u:${req.user._id}` : `v:${req.visitorId || req.visitorHash}`),
+  message: { success: false, code: 'rate_limited', message: 'You are sending messages too quickly. Please wait a moment.' },
+});
+
+// AI assistant: email verification code requests / checks (per IP). Per-address and
+// per-code limits are applied in ai/chatAccess.js too.
+export const chatOtpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: env.ai.chatOtpRequestsPer15Min,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many verification attempts, try again in 15 minutes' },
+});
+
 // AI assistant: anonymous chat sessions created (per IP)
 export const chatSessionLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,

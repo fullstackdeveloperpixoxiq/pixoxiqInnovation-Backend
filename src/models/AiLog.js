@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { toJSONPlugin } from './plugins.js';
 
-export const AI_LOG_SOURCES = ['chat', 'config', 'indexing', 'embedding', 'summary', 'retrieval'];
+export const AI_LOG_SOURCES = ['chat', 'config', 'indexing', 'embedding', 'summary', 'retrieval', 'quota', 'recruitment'];
 
 // Errors and notable events of the AI assistant. Messages are redacted before saving, so
 // they never contain API keys. Kept for 90 days.
