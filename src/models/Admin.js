@@ -22,7 +22,8 @@ const adminSchema = new mongoose.Schema(
       select: false,
     },
     // hr: Job Queries only (enforced in middleware/auth.js)
-    role: { type: String, enum: ['superadmin', 'admin', 'hr'], default: 'admin' },
+    // sales: sales portal only (client enquiries), see middleware/auth.js
+    role: { type: String, enum: ['superadmin', 'admin', 'hr', 'sales'], default: 'admin' },
     isActive: { type: Boolean, default: true },
     lastLogin: Date,
     passwordChangedAt: Date,

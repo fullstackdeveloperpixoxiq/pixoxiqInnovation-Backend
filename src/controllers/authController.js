@@ -58,7 +58,7 @@ export const listAdmins = asyncHandler(async (req, res) => {
 
 export const createAdmin = asyncHandler(async (req, res) => {
   const { name, email, password, role } = req.body;
-  const admin = await Admin.create({ name, email, password, role: ['superadmin', 'hr'].includes(role) ? role : 'admin' });
+  const admin = await Admin.create({ name, email, password, role: ['superadmin', 'hr', 'sales'].includes(role) ? role : 'admin' });
   res.status(201).json({ success: true, message: 'Admin created', data: admin });
 });
 
@@ -71,7 +71,7 @@ export const updateAdmin = asyncHandler(async (req, res) => {
   ['name', 'email'].forEach((key) => {
     if (typeof req.body[key] === 'string') admin[key] = req.body[key];
   });
-  if (['admin', 'superadmin', 'hr'].includes(req.body.role)) admin.role = req.body.role;
+  if (['admin', 'superadmin', 'hr', 'sales'].includes(req.body.role)) admin.role = req.body.role;
   if (typeof req.body.isActive === 'boolean') admin.isActive = req.body.isActive;
   if (req.body.password) admin.password = String(req.body.password);
   await admin.save();

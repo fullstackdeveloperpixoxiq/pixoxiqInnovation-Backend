@@ -11,6 +11,7 @@ import { getOdooConfig, getOdooStatus, listOdooJobs, syncOdooNow, testOdooConfig
 import { aiAdminLimiter } from '../middleware/rateLimit.js';
 import resourceRouter from './resourceRouter.js';
 import authRoutes from './authRoutes.js';
+import salesEnquiryRoutes from './salesEnquiryRoutes.js';
 import publicRoutes from './publicRoutes.js';
 import messageRoutes from './messageRoutes.js';
 import applicationRoutes from './applicationRoutes.js';
@@ -73,6 +74,7 @@ router.use(
   })
 );
 router.use('/messages', protect, messageRoutes);
+router.use('/sales-enquiries', protect, salesEnquiryRoutes);
 router.use('/applications', protect, applicationRoutes);
 router.use('/visiting-card', protect, visitingCardRoutes);
 router.use('/ai', protect, aiRoutes);

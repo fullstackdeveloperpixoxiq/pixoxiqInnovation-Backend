@@ -2,6 +2,8 @@ import Vacancy from '../models/Vacancy.js';
 import Message from '../models/Message.js';
 import Application from '../models/Application.js';
 import StoredFile from '../models/StoredFile.js';
+import SalesEnquiry from '../models/SalesEnquiry.js';
+import Admin from '../models/Admin.js';
 import env from '../config/env.js';
 import { isOdooEnabled, odooCall, odooFields } from './odoo.js';
 import { pullStatuses } from './odooStatus.js';
@@ -184,6 +186,77 @@ export const pushApplication = async (application) => {
   return id;
 };
 
+// ---------- Sales enquiries (sales portal -> CRM lead) ----------
+
+const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const money = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+const yesNo = (v) => (v ? 'Yes' : 'No');
+
+const enquiryDescription = (e) => {
+  const rows = e.products
+    .map((p, i) => `<tr><td>${i + 1}</td><td>${esc(p.name)}${p.description ? `<br/><small>${esc(p.description)}</small>` : ''}</td><td>${p.quantity}</td><td>${money(p.price)}</td><td>${money(p.total)}</td></tr>`)
+    .join('');
+  return [
+    `<p><b>Client:</b> ${esc(e.clientName)}<br/><b>Phone:</b> ${esc(e.phone)}<br/><b>Place:</b> ${esc(e.place)}`,
+    e.email ? `<br/><b>Email:</b> ${esc(e.email)}` : '',
+    e.company ? `<br/><b>Company:</b> ${esc(e.company)}` : '',
+    '</p>',
+    '<p><b>Requirements</b><br/>',
+    `Has e-commerce: ${yesNo(e.hasEcommerce)} · We build e-commerce: ${yesNo(e.needsEcommerce)}<br/>`,
+    `Has brand: ${yesNo(e.hasBrand)}${e.hasBrand && e.brandName ? ` (${esc(e.brandName)})` : ''} · We do branding: ${yesNo(e.needsBranding)}</p>`,
+    e.notes ? `<p><b>Notes</b><br/>${esc(e.notes).replace(/\n/g, '<br/>')}</p>` : '',
+    rows
+      ? `<p><b>Products</b></p><table border="1" cellpadding="4"><tr><th>#</th><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr>${rows}<tr><td colspan="4"><b>Grand total</b></td><td><b>${money(e.grandTotal)}</b></td></tr></table>`
+      : '',
+    `<p><small>Status: ${esc(e.status)} · Recorded via the sales portal</small></p>`,
+  ].join('');
+};
+
+const userCache = new Map();
+const odooUserByEmail = async (email) => {
+  const key = String(email || '').toLowerCase();
+  if (!key) return null;
+  if (!userCache.has(key)) {
+    const [user] = await odooCall('res.users', 'search_read', { domain: ['|', ['login', '=ilike', key], ['email', '=ilike', key]], fields: ['id'], limit: 1 });
+    userCache.set(key, user?.id || null);
+  }
+  return userCache.get(key);
+};
+
+export const pushEnquiry = async (enquiry) => {
+  const fields = await odooFields('crm.lead');
+  const vals = {
+    name: `Sales enquiry – ${enquiry.clientName}${enquiry.company ? ` (${enquiry.company})` : ''}`,
+    contact_name: enquiry.clientName,
+    phone: enquiry.phone,
+    email_from: enquiry.email || false,
+    partner_name: enquiry.company || false,
+    description: enquiryDescription(enquiry),
+  };
+  if (fields.has('city')) vals.city = enquiry.place;
+  if (fields.has('expected_revenue')) vals.expected_revenue = enquiry.grandTotal;
+  // Recorded by the sales team, so it goes straight to CRM -> Sales -> Pipeline as an opportunity
+  if (fields.has('type')) vals.type = 'opportunity';
+  // Salesperson: the Odoo user with the same email as the portal user (so it shows in "My Pipeline")
+  if (fields.has('user_id') && enquiry.createdBy) {
+    const owner = await Admin.findById(enquiry.createdBy).select('email');
+    const userId = owner && (await odooUserByEmail(owner.email));
+    if (userId) vals.user_id = userId;
+  }
+
+  let id = enquiry.odooId;
+  if (id) await odooCall('crm.lead', 'write', { ids: [id], vals });
+  else [id] = await odooCall('crm.lead', 'create', { vals_list: [vals] });
+
+  // Attach product images not sent before
+  const sent = new Set((enquiry.odooFiles || []).map(String));
+  const fresh = enquiry.products.flatMap((p) => p.images.map((img) => ({ id: img, name: p.name }))).filter((f) => !sent.has(String(f.id)));
+  await attachFiles('crm.lead', id, fresh);
+  enquiry.odooFiles = [...(enquiry.odooFiles || []), ...fresh.map((f) => f.id)];
+  enquiry.odooDirty = false;
+  return id;
+};
+
 // ---------- Push with retry ----------
 
 const pushOne = async (doc, push, label) => {
@@ -211,6 +284,9 @@ export const queueMessage = (message) => {
 export const queueApplication = (application) => {
   if (isOdooEnabled()) pushOne(application, pushApplication, 'application');
 };
+export const queueEnquiry = (enquiry) => {
+  if (isOdooEnabled()) pushOne(enquiry, pushEnquiry, 'enquiry');
+};
 
 const pending = { odooId: null, odooAttempts: { $lt: MAX_ATTEMPTS } };
 
@@ -220,7 +296,10 @@ export const retryPending = async () => {
   for (const m of messages) await pushOne(m, pushMessage, 'message');
   const applications = await Application.find({ ...pending, createdAt: { $gte: since } }).limit(50);
   for (const a of applications) await pushOne(a, pushApplication, 'application');
-  return { messages: messages.length, applications: applications.length };
+  // Enquiries: new ones and ones edited since the last push
+  const enquiries = await SalesEnquiry.find({ odooDirty: true, odooAttempts: { $lt: MAX_ATTEMPTS }, updatedAt: { $gte: since } }).limit(50);
+  for (const e of enquiries) await pushOne(e, pushEnquiry, 'enquiry');
+  return { messages: messages.length, applications: applications.length, enquiries: enquiries.length };
 };
 
 // Applicants sent before admin-panel jobs existed in Odoo: link them to their job now
